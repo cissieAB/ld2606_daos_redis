@@ -1,0 +1,39 @@
+# Binaries
+backend/backend
+backend/bin/
+traffic-simulator/venv/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+backend/vendor/
+*.test
+*.out
+go.work
+
+# Python
+traffic-simulator/__pycache__/
+traffic-simulator/*.py[cod]
+traffic-simulator/*$py.class
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# DAOS Client (to be defined by other devs)
+daos-client/build/
+daos-client/dist/
