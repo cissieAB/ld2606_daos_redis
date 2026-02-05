@@ -66,8 +66,4 @@ echo "  3. Build and run:"
 echo "     go build -o backend"
 echo "     ./backend"
 echo
-echo "  4. Use Makefile (optional):"
-echo "     make help                   # Show available commands"
-echo "     make run                    # Run the server"
-echo
 echo "For more information, see README.md"

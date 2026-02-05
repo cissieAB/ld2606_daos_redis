@@ -22,7 +22,7 @@ var config Config
 func initConfig() {
 	config = Config{
 		Debug:        os.Getenv("DEBUG") == "true" || os.Getenv("DEBUG") == "1",
-		RedisAddr:    getEnv("REDIS_ADDR", "ejfat-6.jlab.org:6379"),
+		RedisAddr:    getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisDB:      0,
 		ServerPort:   getEnv("SERVER_PORT", ":8080"),
 		RedisChannel: getEnv("REDIS_CHANNEL", "traffic_channel"),
