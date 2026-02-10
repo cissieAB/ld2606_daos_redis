@@ -1,0 +1,2 @@
+# Redis Traffic Simulator Dependencies
+redis>=5.0.0
