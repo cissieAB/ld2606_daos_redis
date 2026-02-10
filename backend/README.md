@@ -38,6 +38,8 @@ Real-time traffic data server with Redis pub/sub integration and WebSocket suppo
 ./setup.sh
 
 # 2. Start Redis
+# On EJFAT Arma Linux machines, try
+# podman run -d -p 6379:6379 --name redis-traffic docker.io/redis/redis-stack-server:latest
 docker run -d -p 6379:6379 redis/redis-stack-server:latest
 
 # 3. Run the server

@@ -94,7 +94,7 @@ python3 simulator.py --redis-host ejfat-6.jlab.org
 Use the provided setup script to automatically create the virtual environment and install dependencies:
 
 ```bash
-cd scripts/traffic-simulator
+cd traffic-simulator
 ./setup.sh
 ```
 
@@ -111,7 +111,7 @@ If you prefer to set up manually:
 #### 1. Create Python Virtual Environment
 
 ```bash
-cd scripts/traffic-simulator
+cd traffic-simulator
 
 # Create virtual environment
 python3 -m venv venv
