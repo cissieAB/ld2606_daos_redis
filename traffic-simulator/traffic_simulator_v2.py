@@ -9,19 +9,19 @@ Traffic Simulator v2
 === Usage Examples ===
 
 # Basic: 32 nodes, 100 pps each, 10 second run, Redis on localhost
-python3 hpc_traffic_simulator_v2.py --nodes 32 --pps 100 --duration 10
+python3 <this-script>.py --nodes 32 --pps 100 --duration 10
 
 # Remote Redis server (cross-node test):
-python3 hpc_traffic_simulator_v2.py --nodes 32 --pps 100 --duration 10 --redis-host 10.191.130.128
+python3 <this-script>.py --nodes 32 --pps 100 --duration 10 --redis-host 10.191.130.128
 
 # High concurrency stress test:
-python3 hpc_traffic_simulator_v2.py --nodes 256 --pps 100 --duration 10 --redis-host 10.191.130.128
+python3 <this-script>.py --nodes 256 --pps 100 --duration 10 --redis-host 10.191.130.128
 
 # High frequency per node:
-python3 hpc_traffic_simulator_v2.py --nodes 32 --pps 500 --duration 10 --redis-host 10.191.130.128
+python3 <this-script>.py --nodes 32 --pps 500 --duration 10 --redis-host 10.191.130.128
 
 # Custom TTL (5 min retention instead of default 1 hour):
-python3 hpc_traffic_simulator_v2.py --nodes 32 --pps 100 --duration 10 --ttl 300
+python3 <this-script>.py --nodes 32 --pps 100 --duration 10 --ttl 300
 
 # Full options:
 #   --nodes N          Number of concurrent simulated HPC nodes (threads)
@@ -39,6 +39,7 @@ python3 hpc_traffic_simulator_v2.py --nodes 32 --pps 100 --duration 10 --ttl 300
 - Each node runs as a separate thread with its own Redis pipeline
 - Output includes per-node stats, aggregate throughput, and latency percentiles (P50/P95/P99)
 """
+
 import redis
 import json
 import time
@@ -60,6 +61,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class NodeStats:
     """Per-node statistics"""
@@ -80,6 +82,7 @@ class NodeStats:
             "write_latency_p95_ms": statistics.quantiles(self.write_times, n=20)[18] if len(self.write_times) > 10 else 0,
             "errors": self.errors,
         }
+
 
 @dataclass
 class SimulatorConfig:
@@ -112,6 +115,7 @@ def generate_packet(node_id: int, timestamp_ms: int, seq: int) -> Dict:
         "tcp_packets": json.dumps([random.randint(100, 1000) for _ in range(10)]),
         "tcp_bytes": json.dumps([random.randint(1000, 600000) for _ in range(10)])
     }
+
 
 class HashStorageWriter:
     """Hash-based storage writer (production design)"""
@@ -155,6 +159,7 @@ class HashStorageWriter:
         pipeline.execute()
         elapsed_ms = (time.time() - start) * 1000
         return elapsed_ms
+
 
 class HPCNode(threading.Thread):
     """Simulates a single HPC compute node"""
@@ -223,6 +228,7 @@ class HPCNode(threading.Thread):
         finally:
             self.running = False
             self.stats_queue.put(self.stats)
+
 
 class SimulationController:
     """Orchestrates the simulation"""
@@ -377,6 +383,7 @@ class SimulationController:
         logger.info("✓ Simulation complete!")
         logger.info(f"{'='*80}\n")
 
+
 def main():
     parser = argparse.ArgumentParser(
         description=" Traffic Simulator v2 ",
@@ -427,6 +434,7 @@ def main():
     except Exception as e:
         logger.error(f"\n✗ Fatal error: {e}", exc_info=True)
         exit(1)
+
 
 if __name__ == "__main__":
     main()
