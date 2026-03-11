@@ -14,7 +14,6 @@ No measurements are included.
 - We can launch multiple nodes per run.
 - Using the same `HSET` key and data format as [v1](./simulator.py).
 
-The above configurations have low overhead and are used for sender-side latency measurements.
 
 
 ```python
