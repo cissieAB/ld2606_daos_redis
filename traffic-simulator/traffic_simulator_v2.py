@@ -62,6 +62,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def generate_packet(node_id: int, timestamp_ms: int, seq: int, bin_no: int) -> Dict:
+    """Generate a simulated HPC network packet"""
+    return {
+        "timestamp_ms": timestamp_ms,
+        "seq": seq,
+        "node_id": node_id,
+        "source_ip": f"192.168.{(node_id // 256) % 256}.{node_id % 256}",
+        "dest_ip": f"10.0.{random.randint(1, 255)}.{random.randint(1, 255)}",
+        "total_bytes": random.randint(64, 1500),
+        "udp_packets": json.dumps([random.randint(64, 1500) for _ in range(bin_no)]),
+        "udp_bytes": json.dumps([random.randint(1000, 60000) for _ in range(bin_no)]),
+        "tcp_packets": json.dumps([random.randint(100, 1000) for _ in range(bin_no)]),
+        "tcp_bytes": json.dumps([random.randint(1000, 600000) for _ in range(bin_no)])
+    }
+
 @dataclass
 class NodeStats:
     """Per-node statistics"""
@@ -94,27 +109,13 @@ class SimulatorConfig:
     num_nodes: int = 5
     packets_per_second: int = 100
     duration_seconds: int = 10
+    bin_no: int = 100  # Number of bins for UDP/TCP packet/byte arrays
     
     ttl_seconds: int = 3600  # 1 hour
     stats_interval: int = 5  # Print stats every N seconds
     
     # Key format: packet:{destIP}:{srcIP}:{timestamp_ms}
     key_format: str = "packet"  # namespace prefix
-
-def generate_packet(node_id: int, timestamp_ms: int, seq: int) -> Dict:
-    """Generate a simulated HPC network packet"""
-    return {
-        "timestamp_ms": timestamp_ms,
-        "seq": seq,
-        "node_id": node_id,
-        "source_ip": f"192.168.{(node_id // 256) % 256}.{node_id % 256}",
-        "dest_ip": f"10.0.{random.randint(1, 255)}.{random.randint(1, 255)}",
-        "total_bytes": random.randint(64, 1500),
-        "udp_packets": json.dumps([random.randint(64, 1500) for _ in range(10)]),
-        "udp_bytes": json.dumps([random.randint(1000, 60000) for _ in range(10)]),
-        "tcp_packets": json.dumps([random.randint(100, 1000) for _ in range(10)]),
-        "tcp_bytes": json.dumps([random.randint(1000, 600000) for _ in range(10)])
-    }
 
 
 class HashStorageWriter:
@@ -191,7 +192,7 @@ class HPCNode(threading.Thread):
                 
                 # Generate packet batch
                 packets = [
-                    generate_packet(self.node_id, timestamp_ms + i, self.seq + i)
+                    generate_packet(self.node_id, timestamp_ms + i, self.seq + i, self.config.bin_no)
                     for i in range(self.config.packets_per_second)
                 ]
                 self.seq += self.config.packets_per_second
@@ -403,6 +404,8 @@ def main():
                        help="Number of concurrent HPC nodes")
     parser.add_argument("--pps", type=int, default=100,
                        help="Packets per second per node")
+    parser.add_argument("--bin-no", type=int, default=100,
+                       help="Number of bins for UDP/TCP packet/byte arrays")
     parser.add_argument("--duration", type=int, default=10,
                        help="Simulation duration in seconds")
     parser.add_argument("--ttl", type=int, default=3600,
@@ -419,6 +422,7 @@ def main():
         redis_db=args.redis_db,
         num_nodes=args.nodes,
         packets_per_second=args.pps,
+        bin_no=args.bin_no,
         duration_seconds=args.duration,
         ttl_seconds=args.ttl,
         stats_interval=args.stats_interval,
