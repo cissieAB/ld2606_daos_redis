@@ -113,6 +113,7 @@ class SimulatorConfig:
     
     ttl_seconds: int = 3600  # 1 hour
     stats_interval: int = 5  # Print stats every N seconds
+    mode: int = 1  # 1=key-value, 2=key-field-value
     
     # Key format: packet:{destIP}:{srcIP}:{timestamp_ms}
     key_format: str = "packet"  # namespace prefix
@@ -121,39 +122,56 @@ class SimulatorConfig:
 class HashStorageWriter:
     """Hash-based storage writer (production design)"""
     
-    def __init__(self, redis_client: redis.Redis, key_format: str = "packet"):
+    def __init__(self, redis_client: redis.Redis, key_format: str = "packet", mode: int = 1):
         self.redis = redis_client
         self.key_format = key_format
+        self.mode = mode
         self.pipeline_batch_size = 100  # Batch writes for efficiency
+
+    @staticmethod
+    def _packet_context(packet: Dict) -> Dict:
+        """Return packet payload for Redis storage."""
+        return {
+            "timestamp_ms": packet["timestamp_ms"],
+            "node_id": packet["node_id"],
+            "source_ip": packet["source_ip"],
+            "dest_ip": packet["dest_ip"],
+            "total_bytes": packet["total_bytes"],
+            "udp_packets": packet["udp_packets"],
+            "udp_bytes": packet["udp_bytes"],
+            "tcp_packets": packet["tcp_packets"],
+            "tcp_bytes": packet["tcp_bytes"],
+        }
     
     def write_packets(self, packets: List[Dict], ttl: int) -> float:
-        """Write packet batch and return elapsed time in ms"""
+        """Write packet batch and return elapsed time in ms."""
         if not packets:
             return 0.0
         
         start = time.time()
         pipeline = self.redis.pipeline()
-        
-        for packet in packets:
-            # Key format: packet:{destIP}:{srcIP}:{timestamp_ms}
-            key = (f"{self.key_format}:{packet['dest_ip']}:{packet['source_ip']}"
-                   f":{packet['timestamp_ms']}")
-            
-            # Store packet as hash
-            pipeline.hset(key, mapping={
-                "timestamp_ms": packet["timestamp_ms"],
-                "node_id": packet["node_id"],
-                "source_ip": packet["source_ip"],
-                "dest_ip": packet["dest_ip"],
-                "total_bytes": packet["total_bytes"],
-                "udp_packets": packet["udp_packets"],
-                "udp_bytes": packet["udp_bytes"],
-                "tcp_packets": packet["tcp_packets"],
-                "tcp_bytes": packet["tcp_bytes"],
-            })
-            
-            # Set TTL
-            pipeline.expire(key, ttl)
+
+        if self.mode == 1:
+            for packet in packets:
+                # Key format: packet:{destIP}:{srcIP}:{timestamp_ms}
+                key = (f"{self.key_format}:{packet['dest_ip']}:{packet['source_ip']}"
+                       f":{packet['timestamp_ms']}")
+                
+                # Store packet as hash
+                pipeline.hset(key, mapping=self._packet_context(packet))
+                pipeline.expire(key, ttl)
+        elif self.mode == 2:
+            grouped_packets = {}
+            for packet in packets:
+                bucket_key = f"{self.key_format}:h:{packet['timestamp_ms']}"
+                field = f"{packet['source_ip']}:{packet['dest_ip']}"
+                grouped_packets.setdefault(bucket_key, {})[field] = json.dumps(self._packet_context(packet))
+
+            for bucket_key, mapping in grouped_packets.items():
+                pipeline.hset(bucket_key, mapping=mapping)
+                pipeline.expire(bucket_key, ttl)
+        else:
+            raise ValueError(f"Unsupported mode: {self.mode}. Expected 1 or 2.")
         
         # Execute pipeline
         pipeline.execute()
@@ -266,7 +284,7 @@ class SimulationController:
             logger.warning(f"Warning: Failed to clean up: {e}")
         
         # Create writer
-        self.writer = HashStorageWriter(self.redis_client, self.config.key_format)
+        self.writer = HashStorageWriter(self.redis_client, self.config.key_format, self.config.mode)
     
     def run(self):
         """Run the simulation"""
@@ -279,7 +297,7 @@ class SimulationController:
         logger.info(f"  Total throughput: {self.config.num_nodes * self.config.packets_per_second} records/sec")
         logger.info(f"  Duration: {self.config.duration_seconds}s")
         logger.info(f"  TTL: {self.config.ttl_seconds}s")
-        logger.info(f"  Storage: Hash design")
+        logger.info(f"  Storage mode: {self.config.mode} ({'key-value' if self.config.mode == 1 else 'key-field-value'})")
         logger.info(f"{'='*80}\n")
         
         # Create and start nodes
@@ -410,6 +428,8 @@ def main():
                        help="Data TTL in seconds (1 hour default)")
     parser.add_argument("--stats-interval", type=int, default=5,
                        help="Print stats every N seconds")
+    parser.add_argument("--mode", type=int, choices=[1, 2], default=1,
+                       help="Storage mode: 1=key-value, 2=key-field-value")
     
     args = parser.parse_args()
     
@@ -424,6 +444,7 @@ def main():
         duration_seconds=args.duration,
         ttl_seconds=args.ttl,
         stats_interval=args.stats_interval,
+        mode=args.mode,
     )
     
     # Run simulation
