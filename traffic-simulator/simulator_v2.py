@@ -135,14 +135,13 @@ class HashStorageWriter:
         pipeline = self.redis.pipeline()
         
         for packet in packets:
-            # Key format: packet:{destIP}:{srcIP}:{timestamp_ms}:{seq}
+            # Key format: packet:{destIP}:{srcIP}:{timestamp_ms}
             key = (f"{self.key_format}:{packet['dest_ip']}:{packet['source_ip']}"
-                   f":{packet['timestamp_ms']}:{packet['seq']}")
+                   f":{packet['timestamp_ms']}")
             
             # Store packet as hash
             pipeline.hset(key, mapping={
                 "timestamp_ms": packet["timestamp_ms"],
-                "seq": packet["seq"],
                 "node_id": packet["node_id"],
                 "source_ip": packet["source_ip"],
                 "dest_ip": packet["dest_ip"],
@@ -277,7 +276,7 @@ class SimulationController:
         logger.info(f"Configuration:")
         logger.info(f"  Nodes: {self.config.num_nodes}")
         logger.info(f"  Packets/sec/node: {self.config.packets_per_second}")
-        logger.info(f"  Total throughput: {self.config.num_nodes * self.config.packets_per_second} pps")
+        logger.info(f"  Total throughput: {self.config.num_nodes * self.config.packets_per_second} records/sec")
         logger.info(f"  Duration: {self.config.duration_seconds}s")
         logger.info(f"  TTL: {self.config.ttl_seconds}s")
         logger.info(f"  Storage: Hash design")
@@ -354,11 +353,9 @@ class SimulationController:
         
         # Aggregate stats
         logger.info(f"\nAggregate Statistics:")
-        logger.info(f"  Total Packets: {total_packets:,}")
-        logger.info(f"  Total Bytes: {total_bytes:,}")
         logger.info(f"  Total Errors: {total_errors}")
         logger.info(f"  Duration: {self.config.duration_seconds}s")
-        logger.info(f"  Throughput: {total_packets / self.config.duration_seconds:.0f} pps")
+        logger.info(f"  Throughput: {total_packets / self.config.duration_seconds:.0f} records/sec")
         
         if all_write_times:
             logger.info(f"\nWrite Latency Statistics (across all writes):")
@@ -376,6 +373,7 @@ class SimulationController:
             used_memory_mb = info.get('used_memory', 0) / (1024 * 1024)
             logger.info(f"\nRedis Statistics:")
             logger.info(f"  Used Memory: {used_memory_mb:.2f} MB")
+            # redis.dbsize() returns the number of keys in the currently selected database
             logger.info(f"  Keys: {self.redis_client.dbsize():,}")
         except Exception as e:
             logger.warning(f"Could not fetch Redis stats: {e}")
