@@ -82,7 +82,7 @@ podman ps
 
 If you have an existing Redis server (e.g., `ejfat-6.jlab.org`), you can use it directly:
 ```bash
-python3 simulator.py --redis-host ejfat-6.jlab.org
+python3 simulator_bk.py --redis-host ejfat-6.jlab.org
 ```
 
 **Note:** Make sure the Redis server has RediSearch module installed for the backend to work properly.
@@ -137,7 +137,7 @@ pip install -r requirements.txt
 Generate traffic with default settings (1 node, 100 packets/sec, publish disabled, storage enabled):
 
 ```bash
-python3 simulator.py --redis-host ejfat-6.jlab.org
+python3 simulator_bk.py --redis-host ejfat-6.jlab.org
 ```
 
 **Note:** Default behavior is `--publish False` and `--storage True`.
@@ -145,7 +145,7 @@ python3 simulator.py --redis-host ejfat-6.jlab.org
 ### Advanced Options
 
 ```bash
-python3 simulator.py \
+python3 simulator_bk.py \
   --redis-host ejfat-6.jlab.org \
   --redis-port 6379 \
   --nodes 5 \
@@ -180,7 +180,7 @@ python3 simulator.py \
 ### Example 1: Quick Test (10 seconds)
 
 ```bash
-python3 simulator.py \
+python3 simulator_bk.py \
   --redis-host ejfat-6.jlab.org \
   --duration 10
 ```
@@ -188,7 +188,7 @@ python3 simulator.py \
 ### Example 2: High Load Test (5 nodes, 500 pps each)
 
 ```bash
-python3 simulator.py \
+python3 simulator_bk.py \
   --redis-host ejfat-6.jlab.org \
   --nodes 5 \
   --packets-per-second 500
@@ -198,7 +198,7 @@ python3 simulator.py \
 
 ```bash
 # Useful for testing pub/sub without filling Redis
-python3 simulator.py \
+python3 simulator_bk.py \
   --redis-host ejfat-6.jlab.org \
   --publish True \
   --storage False
@@ -208,7 +208,7 @@ python3 simulator.py \
 
 ```bash
 # Useful for loading data into Redis without pub/sub
-python3 simulator.py \
+python3 simulator_bk.py \
   --redis-host ejfat-6.jlab.org \
   --publish False \
   --storage True \
@@ -218,7 +218,7 @@ python3 simulator.py \
 ### Example 5: Custom Channel
 
 ```bash
-python3 simulator.py \
+python3 simulator_bk.py \
   --redis-host ejfat-6.jlab.org \
   --channel my_custom_channel
 ```
@@ -238,10 +238,10 @@ The simulator displays real-time statistics every 5 seconds (configurable):
 **Customize stats interval:**
 ```bash
 # Print stats every 10 seconds
-python3 simulator.py --redis-host localhost --stats-interval 10
+python3 simulator_bk.py --redis-host localhost --stats-interval 10
 
 # Disable periodic stats (only show final summary)
-python3 simulator.py --redis-host localhost --stats-interval 0
+python3 simulator_bk.py --redis-host localhost --stats-interval 0
 ```
 
 Press `Ctrl+C` to stop the simulator gracefully and see final statistics.
@@ -306,10 +306,10 @@ cd traffic-simulator
 
 # 3. Activate and run
 source venv/bin/activate
-python3 simulator.py
+python3 simulator_bk.py
 
 # For remote Redis server:
-# python3 simulator.py --redis-host ejfat-6.jlab.org
+# python3 simulator_bk.py --redis-host ejfat-6.jlab.org
 ```
 
 ## Integration with Other Components
@@ -332,7 +332,7 @@ The simulator is a **shared component** used by multiple parts of the system.
    cd ../traffic-simulator  # or stay in this directory
    ./setup.sh
    source venv/bin/activate
-   python3 simulator.py
+   python3 simulator_bk.py
    ```
 
 3. **Verify**: Backend logs show received packets, WebSocket broadcasts data
@@ -346,7 +346,7 @@ See [Backend README](../backend/README.md) for backend setup details.
    cd ../traffic-simulator
    ./setup.sh
    source venv/bin/activate
-   python3 simulator.py
+   python3 simulator_bk.py
    ```
 
 2. **Run DAOS client** to read and persist data
