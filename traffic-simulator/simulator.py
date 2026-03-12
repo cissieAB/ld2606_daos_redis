@@ -316,6 +316,16 @@ class TrafficSimulator:
         print(f"  Total Storage Errors:    {total_store_errors}")
 
 
+def str_to_bool(value: str) -> bool:
+    """Parse common string boolean values for argparse."""
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "y", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
+
+
 def main():
     """Main entry point for the simulator."""
     parser = argparse.ArgumentParser(
@@ -347,20 +357,12 @@ def main():
         help="Redis database number"
     )
     parser.add_argument(
-        "--publish", action="store_true", default=True,
-        help="Enable Redis pub/sub publishing (default: enabled)"
+        "--publish", type=str_to_bool, default=False,
+        help="Enable or disable Redis pub/sub publishing (True|False)"
     )
     parser.add_argument(
-        "--no-publish", action="store_false", dest="publish",
-        help="Disable Redis pub/sub publishing"
-    )
-    parser.add_argument(
-        "--storage", action="store_true", default=True,
-        help="Enable Redis data storage (default: enabled)"
-    )
-    parser.add_argument(
-        "--no-storage", action="store_false", dest="storage",
-        help="Disable Redis data storage"
+        "--storage", type=str_to_bool, default=True,
+        help="Enable or disable Redis data storage (True|False)"
     )
     parser.add_argument(
         "--channel", type=str, default="traffic_channel",
