@@ -316,6 +316,17 @@ class TrafficSimulator:
         print(f"  Total Storage Errors:    {total_store_errors}")
 
 
+def parse_data_mode(mode: str):
+    """Map a single CLI mode into publish/storage booleans."""
+    mode_map = {
+        "both": (True, True),
+        "publish": (True, False),
+        "storage": (False, True),
+        "none": (False, False),
+    }
+    return mode_map[mode]
+
+
 def main():
     """Main entry point for the simulator."""
     parser = argparse.ArgumentParser(
@@ -347,20 +358,12 @@ def main():
         help="Redis database number"
     )
     parser.add_argument(
-        "--publish", action="store_true", default=True,
-        help="Enable Redis pub/sub publishing (default: enabled)"
+        "--data-mode", choices=["both", "publish", "storage", "none"], default="both",
+        help="Combined data path mode: both, publish-only, storage-only, or none"
     )
     parser.add_argument(
-        "--no-publish", action="store_false", dest="publish",
-        help="Disable Redis pub/sub publishing"
-    )
-    parser.add_argument(
-        "--storage", action="store_true", default=True,
-        help="Enable Redis data storage (default: enabled)"
-    )
-    parser.add_argument(
-        "--no-storage", action="store_false", dest="storage",
-        help="Disable Redis data storage"
+        "--pubsub", choices=["on", "off"], default=None,
+        help="Optional override for pub/sub publishing"
     )
     parser.add_argument(
         "--channel", type=str, default="traffic_channel",
@@ -372,6 +375,12 @@ def main():
     )
     
     args = parser.parse_args()
+
+    publish_enabled, storage_enabled = parse_data_mode(args.data_mode)
+    if args.pubsub == "on":
+        publish_enabled = True
+    elif args.pubsub == "off":
+        publish_enabled = False
     
     # Setup signal handlers for graceful shutdown
     def signal_handler(sig, frame):
@@ -388,8 +397,8 @@ def main():
             redis_host=args.redis_host,
             redis_port=args.redis_port,
             redis_db=args.redis_db,
-            publish_enabled=args.publish,
-            storage_enabled=args.storage,
+            publish_enabled=publish_enabled,
+            storage_enabled=storage_enabled,
             channel_name=args.channel,
             stats_interval=args.stats_interval
         )
