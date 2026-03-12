@@ -134,13 +134,13 @@ pip install -r requirements.txt
 
 
 
-Generate traffic with default settings (1 node, 100 packets/sec, publish + storage enabled):
+Generate traffic with default settings (1 node, 100 packets/sec, publish disabled, storage enabled):
 
 ```bash
 python3 simulator.py --redis-host ejfat-6.jlab.org
 ```
 
-**Note:** Publishing and storage are **enabled by default**. Use `--no-publish` or `--no-storage` to disable.
+**Note:** Default behavior is `--publish False` and `--storage True`.
 
 ### Advanced Options
 
@@ -165,11 +165,9 @@ python3 simulator.py \
 | `--redis-db` | `0` | Redis database number |
 | `--nodes` | `1` | Number of traffic nodes to simulate |
 | `--packets-per-second` (or `--pps`) | `100` | Packets per second per node |
-| `--duration` | `None` | Duration in seconds (None = infinite) |
-| `--publish` | `True` | Enable pub/sub publishing (default: ON) |
-| `--no-publish` | - | Disable pub/sub publishing |
-| `--storage` | `True` | Enable data storage (default: ON) |
-| `--no-storage` | - | Disable data storage |
+| `--duration` | `None` | Duration in seconds (`0` or `None` = infinite / until stopped) |
+| `--publish` | `False` | Enable or disable pub/sub publishing with `True` or `False` |
+| `--storage` | `True` | Enable or disable data storage with `True` or `False` |
 | `--channel` | `traffic_channel` | Redis pub/sub channel name |
 | `--stats-interval` | `5` | Interval in seconds for printing stats (0 to disable) |
 
@@ -202,7 +200,8 @@ python3 simulator.py \
 # Useful for testing pub/sub without filling Redis
 python3 simulator.py \
   --redis-host ejfat-6.jlab.org \
-  --no-storage
+  --publish True \
+  --storage False
 ```
 
 ### Example 4: Storage Only (No Publishing)
@@ -211,7 +210,8 @@ python3 simulator.py \
 # Useful for loading data into Redis without pub/sub
 python3 simulator.py \
   --redis-host ejfat-6.jlab.org \
-  --no-publish \
+  --publish False \
+  --storage True \
   --duration 30
 ```
 
@@ -301,7 +301,7 @@ The fastest way to get started:
 docker run -d -p 6379:6379 redis/redis-stack-server:latest
 
 # 2. Setup simulator (first time only)
-cd scripts/traffic-simulator
+cd traffic-simulator
 ./setup.sh
 
 # 3. Activate and run
@@ -379,7 +379,7 @@ Reduce packet rate or enable TTL (already enabled, 1 hour default)
 
 ### Publishing Not Working
 
-- Publishing is enabled by default
+- Publishing is disabled by default; enable it with `--publish True`
 - Verify channel name matches backend configuration: `--channel traffic_channel`
 - Check if backend is subscribed to the correct channel
 
