@@ -1,14 +1,24 @@
-# Issue #6 Plan: Measure latency on the Redis server/receiver side
+# Issue #6 Plan: Measure end-to-end latency from client write to server query
 
 Issue: <https://github.com/cissieAB/ld2606_daos_redis/issues/6>
 
 ## Goal
 
-Extend the current sender-side latency measurements so we also measure receiver-side latency, including Redis query time, on the backend/server side.
+Measure true end-to-end latency from the client write path to the server query path, rather than only measuring sender-side write latency.
+
+Target definition:
+
+- *End-to-end latency* = time from when the client writes a packet record to Redis to when the server finishes the corresponding query and has the result available.
+
+This should explicitly include:
+
+- client-side write time,
+- Redis/network transit time,
+- server-side query time.
 
 ## Current state
 
-- `traffic-simulator/simulator_v2.py` measures write latency on the sender side.
+- `traffic-simulator/simulator_v2.py` measures sender-side write latency only.
 - `traffic-simulator/Redis_measurements.md` documents sender-side P50/P95/P99 write latency results.
 - The Go backend already:
   - subscribes to Redis pub/sub,
@@ -16,118 +26,158 @@ Extend the current sender-side latency measurements so we also measure receiver-
   - initializes state from Redis in `backend/redis.go`,
   - has RediSearch-based query logic for startup reconstruction.
 
-## Proposed measurement scope
+## Recommended measurement model
 
-Split receiver-side latency into clear components:
+Split the end-to-end path into three measured components, then report both the parts and the total:
 
-1. *End-to-end ingest latency*
-   - From packet timestamp produced by simulator to the time the backend receives/processes it.
-   - Best for answering, "How stale is data when it reaches the receiver?"
+1. *Client write latency*
+   - Time spent by the simulator performing the Redis write.
+   - Already partially available in `simulator_v2.py`.
 
-2. *Redis query latency*
-   - Time spent by backend querying Redis/RediSearch for data.
-   - Best for answering the issue text: "Include the query time in the latency measurements."
+2. *Write-to-query-start delay*
+   - Time from successful client write completion to when the backend begins the query that is meant to observe that data.
+   - Captures Redis visibility delay, transport delay, scheduling delay, and backend trigger delay.
 
-3. *Optional HTTP read latency*
-   - Time for `/latest` requests, if the team wants user-visible read latency too.
-   - This is useful, but probably secondary to (1) and (2).
+3. *Server query latency*
+   - Time spent by the backend executing the Redis or RediSearch query and decoding the result.
+
+Then compute:
+
+4. *End-to-end latency*
+   - `query_finish_time - client_write_start_time`, or equivalently
+   - `client write latency + write-to-query-start delay + server query latency`
+
+This gives a clean answer to: "from client write to server query".
+
+## Key design requirement
+
+To measure end-to-end latency correctly, the server must query for a record that can be matched to a specific client write event.
+
+That means each measured record needs:
+
+- a stable unique identifier, or
+- a timestamp plus enough metadata to identify the exact packet or batch.
+
+Recommended identifier:
+
+- add a `trace_id` or `measurement_id` per packet or batch in the simulator payload and Redis record.
+
+Without a stable identifier, the query timing can still be measured, but the end-to-end path will be ambiguous.
 
 ## Recommended implementation
 
-### Phase 1, add backend query latency instrumentation
+### Phase 1, add correlation metadata in the simulator
 
-Add timing around Redis/RediSearch calls in `backend/redis.go`:
+Update the simulator write path so each measured write includes:
 
-- Measure duration for the startup query in `initializeLatestData()`.
-- If more query paths are added later, reuse the same timing helper.
-- Record at least:
-  - count
-  - avg
-  - min
-  - max
-  - P50
-  - P95
-  - P99
+- `write_start_ms`
+- `write_end_ms`
+- `trace_id`
+- existing packet metadata like timestamp/src/dst/node
 
-Implementation suggestion:
+Recommended minimum:
 
-- Add a small in-memory latency collector in backend, for example:
-  - `type LatencyStats struct { ... }`
-  - protected by `sync.Mutex`
-- Add helper like:
-  - `measureQuery("initializeLatestData", func() error { ... })`
-- Expose metrics via:
-  - logs first, and/or
-  - a lightweight endpoint such as `/metrics/latency` or `/stats`
+- one `trace_id` per batch write if batch-level measurement is acceptable
+- one `trace_id` per packet if packet-level measurement is required
 
-Why first:
-- Low risk
-- Directly addresses query-time requirement
-- Easy to validate locally
+Recommendation:
+- start with *batch-level* end-to-end measurement because it is simpler and matches the current payload flow better.
 
-### Phase 2, add receiver-side ingest latency
+### Phase 2, add backend query timing with correlation
 
-Use packet timestamps already embedded in simulator payloads:
+In `backend/redis.go`:
 
-- On backend receipt of pub/sub message, compute:
-  - `receiver_now_ms - packet.timestamp_ms`
-- Aggregate this into ingest latency stats.
+- add a query path that looks up the record or batch by `trace_id` or deterministic key
+- measure:
+  - query start time
+  - query finish time
+  - query duration
+- recover the write metadata from the queried record
+- compute end-to-end latency on the backend side
 
-Important detail:
-- If packets are batched, compute either:
-  - per-packet latency, or
-  - one latency per batch using payload timestamp
-- Prefer documenting exactly which definition is used.
+Record at least:
 
-Recommended definition:
-- Start with *batch ingest latency* using `payload.Timestamp`, because it matches current payload structure and is simpler.
-- If needed later, add per-packet latency for finer analysis.
+- count
+- avg
+- min
+- max
+- P50
+- P95
+- P99
 
-### Phase 3, update measurement workflow and docs
+Recommended helper structure:
 
-Update `traffic-simulator/Redis_measurements.md` or add a new doc with:
+- `type LatencyStats struct { ... }`
+- protected by `sync.Mutex`
+- separate collectors for:
+  - client write latency
+  - write-to-query-start delay
+  - server query latency
+  - end-to-end latency
 
-- sender-side write latency
-- receiver-side ingest latency
-- backend query latency
+### Phase 3, expose measurement results
+
+Expose the stats via one of:
+
+- logs first, or
+- a lightweight endpoint such as `/stats` or `/metrics/latency`
+
+Recommended first version:
+- logs plus one JSON endpoint for easy collection.
+
+### Phase 4, update docs and benchmark workflow
+
+Update `traffic-simulator/Redis_measurements.md` or add a dedicated end-to-end benchmark doc with:
+
+- exact metric definitions
+- whether measurement is packet-level or batch-level
 - test conditions:
   - nodes
   - duration
   - pps
   - Redis host
   - mode 1 vs mode 2
-- exact meaning of each metric
+- results for each latency component and total end-to-end latency
 
 Suggested result table columns:
 
 | Metric | Mode 1 | Mode 2 |
 |---|---:|---:|
-| Sender write P95 (ms) | ... | ... |
-| Sender write P99 (ms) | ... | ... |
-| Receiver ingest P95 (ms) | ... | ... |
-| Receiver ingest P99 (ms) | ... | ... |
-| Redis query P95 (ms) | ... | ... |
-| Redis query P99 (ms) | ... | ... |
+| Client write P95 (ms) | ... | ... |
+| Client write P99 (ms) | ... | ... |
+| Write-to-query-start P95 (ms) | ... | ... |
+| Write-to-query-start P99 (ms) | ... | ... |
+| Server query P95 (ms) | ... | ... |
+| Server query P99 (ms) | ... | ... |
+| End-to-end P95 (ms) | ... | ... |
+| End-to-end P99 (ms) | ... | ... |
 
 ## Concrete file changes
+
+### Simulator
+
+- `traffic-simulator/simulator_v2.py`
+  - add `trace_id`
+  - record write start/end timestamps
+  - ensure metadata is written into Redis in queryable form
 
 ### Backend
 
 - `backend/redis.go`
-  - wrap Redis/RediSearch query calls with timers
-  - add ingest-latency timing when processing pub/sub payloads
+  - add correlated query timing
+  - compute end-to-end latency from recovered write metadata
 - `backend/types.go`
   - add stats structs/shared state
 - `backend/handlers.go`
   - optionally expose stats endpoint
 - `backend/README.md`
-  - document new latency metrics and endpoint usage
+  - document end-to-end measurement flow
 
-### Simulator/docs
+### Docs
 
 - `traffic-simulator/Redis_measurements.md`
-  - add receiver-side/query-side sections
-- optionally add a helper script for benchmark orchestration if repeated runs are expected
+  - extend to include end-to-end metrics
+- optionally add a dedicated benchmark plan doc if the team wants a cleaner separation
 
 ## Validation plan
 
@@ -137,31 +187,37 @@ Suggested result table columns:
 4. Run `simulator_v2.py` with fixed settings, for example:
    - `--nodes 32 --duration 60 --pps 100 --mode 1`
    - repeat for mode 2
-5. Capture:
-   - sender write latency stats
-   - backend ingest latency stats
-   - backend query latency stats
-6. Compare results across modes
-7. Document whether query time is negligible or dominant under load
+5. For each measured write or batch:
+   - store `trace_id`
+   - query by that identifier on the backend
+   - record query duration and end-to-end latency
+6. Capture:
+   - client write latency stats
+   - write-to-query-start delay stats
+   - server query latency stats
+   - end-to-end latency stats
+7. Compare results across modes
+8. Document which component dominates under load
 
 ## Open questions to confirm in review
 
-1. Should "receiver-side latency" mean:
-   - pub/sub receive latency,
-   - query latency,
-   - or both?
-2. Should we measure only startup query latency, or also recurring query endpoints?
-3. Does the team want:
-   - log-based stats,
-   - an HTTP stats endpoint,
-   - or Prometheus-style metrics?
+1. Should measurement be packet-level or batch-level?
+   - I recommend batch-level first.
+2. Should the server actively query after each write, or should the benchmark run queries at a fixed sampling rate?
+3. Should the query target be:
+   - exact key lookup,
+   - hash field lookup,
+   - or RediSearch query?
+
+These choices matter because end-to-end latency depends strongly on the query path.
 
 ## Recommendation
 
-Implement both *query latency* and *receiver ingest latency*, but ship them in that order:
+Center the work on *correlated end-to-end latency*:
 
-1. query latency instrumentation first,
-2. ingest latency second,
-3. docs/results update last.
+1. add `trace_id` and write timestamps in the simulator,
+2. add backend correlated query timing,
+3. report component latencies and total end-to-end latency,
+4. update docs/results last.
 
-That gives the team a small first PR with clear value, then a second PR for broader measurement coverage if needed.
+That will make the PR clearly match the requested metric: from client write to server query completion.
