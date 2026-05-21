@@ -62,10 +62,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def generate_packet(node_id: int, timestamp_ms: int, seq: int, bin_no: int) -> Dict:
+def generate_packet(node_id: int, timestamp: int, seq: int, bin_no: int) -> Dict:
     """Generate a simulated HPC network packet"""
     return {
-        "timestamp_ms": timestamp_ms,
+        "timestamp": timestamp,
         "seq": seq,
         "node_id": node_id,
         "source_ip": f"192.168.{(node_id // 256) % 256}.{node_id % 256}",
@@ -115,7 +115,7 @@ class SimulatorConfig:
     stats_interval: int = 5  # Print stats every N seconds
     mode: int = 1  # 1=key-value, 2=key-field-value
     
-    # Key format: packet:{destIP}:{srcIP}:{timestamp_ms}
+    # Key format: packet:{destIP}:{srcIP}:{timestamp}
     key_format: str = "packet"  # namespace prefix
 
 
@@ -132,7 +132,7 @@ class HashStorageWriter:
     def _packet_context(packet: Dict) -> Dict:
         """Return packet payload for Redis storage."""
         return {
-            "timestamp_ms": packet["timestamp_ms"],
+            "timestamp": packet["timestamp"],
             "node_id": packet["node_id"],
             "source_ip": packet["source_ip"],
             "dest_ip": packet["dest_ip"],
@@ -153,9 +153,9 @@ class HashStorageWriter:
 
         if self.mode == 1:
             for packet in packets:
-                # Key format: packet:{destIP}:{srcIP}:{timestamp_ms}
+                # Key format: packet:{destIP}:{srcIP}:{timestamp}
                 key = (f"{self.key_format}:{packet['dest_ip']}:{packet['source_ip']}"
-                       f":{packet['timestamp_ms']}")
+                       f":{packet['timestamp']}")
                 
                 # Store packet as hash
                 pipeline.hset(key, mapping=self._packet_context(packet))
@@ -163,7 +163,7 @@ class HashStorageWriter:
         elif self.mode == 2:
             grouped_packets = {}
             for packet in packets:
-                bucket_key = f"{self.key_format}:h:{packet['timestamp_ms']}"
+                bucket_key = f"{self.key_format}:h:{packet['timestamp']}"
                 field = f"{packet['source_ip']}:{packet['dest_ip']}"
                 grouped_packets.setdefault(bucket_key, {})[field] = json.dumps(self._packet_context(packet))
 
@@ -205,11 +205,11 @@ class HPCNode(threading.Thread):
         try:
             while self.running:
                 batch_start = time.time()
-                timestamp_ms = int(time.time() * 1000)
+                timestamp = int(time.time())
                 
-                # Generate packet batch
+                # Generate packet batch (same timestamp for all packets in batch)
                 packets = [
-                    generate_packet(self.node_id, timestamp_ms + i, self.seq + i, self.config.bin_no)
+                    generate_packet(self.node_id, timestamp, self.seq + i, self.config.bin_no)
                     for i in range(self.config.packets_per_second)
                 ]
                 self.seq += self.config.packets_per_second
