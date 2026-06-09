@@ -1,39 +1,35 @@
+// Package main implements a real-time traffic data server.
 package main
 
-import (
-	"sync"
+// Packet represents a network packet with arbitrary fields.
+type Packet struct {
+	Key string `json:"_key"`
 
-	"github.com/gorilla/websocket"
-)
+	Timestamp  int    `json:"timestamp"`
+	Seq        int    `json:"seq"`
+	NodeID     int    `json:"node_id"`
+	Src        string `json:"source_ip"`
+	Dest       string `json:"dest_ip"`
+	TotalBytes int    `json:"total_bytes"`
 
-// trafficMessage represents incoming messages from Redis.
-type trafficMessage struct {
-	PacketCount int           `json:"packet_count"`
-	Timestamp   int           `json:"timestamp"`
-	Packets     []interface{} `json:"packets"`
+	UDPPackets []int `json:"udp_packets"`
+	UDPBytes   []int `json:"udp_bytes"`
+	TCPPackets []int `json:"tcp_packets"`
+	TCPBytes   []int `json:"tcp_bytes"`
 }
 
-// latestData holds the accumulated latest data.
-type latestData struct {
-	Timestamp   int           `json:"timestamp"`
-	PacketCount int           `json:"packet_count"`
-	Packets     []interface{} `json:"packets"`
-}
+// PacketSummary is the compact edge payload sent to the frontend.
+type PacketSummary struct {
+	Src       string `json:"src"`
+	Dest      string `json:"dest"`
+	Timestamp int    `json:"timestamp"`
 
-// Global variables for state management
-var (
-	// latest holds the accumulated latest message data.
-	latest latestData
-	
-	// latestMu protects access to latest (RWMutex allows multiple readers)
-	latestMu sync.RWMutex
-	
-	// clients keeps track of connected WebSocket clients.
-	clients = make(map[*websocket.Conn]bool)
-	
-	// clientsMu protects access to clients map
-	clientsMu sync.Mutex
-	
-	// broadcast is a channel used to deliver Redis messages to WebSocket clients.
-	broadcast = make(chan string, 100)
-)
+	TCPPacketsTotal int `json:"tcp_packets_total"`
+	TCPBytesTotal   int `json:"tcp_bytes_total"`
+
+	UDPPacketsTotal int `json:"udp_packets_total"`
+	UDPBytesTotal   int `json:"udp_bytes_total"`
+
+	TotalPackets int `json:"total_packets"`
+	TotalBytes   int `json:"total_bytes"`
+}
