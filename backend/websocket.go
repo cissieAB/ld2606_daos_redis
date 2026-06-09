@@ -1,19 +1,32 @@
+// Package main implements a real-time traffic data server.
 package main
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
-// upgrader converts HTTP requests to WebSocket connections.
+var (
+	// clients is the set of connected WebSocket clients.
+	clients   = make(map[*websocket.Conn]bool)
+	clientsMu sync.Mutex
+
+	// broadcast is buffered so Redis polling is not blocked by slow clients.
+	broadcast = make(chan string, 100)
+)
+
+// upgrader converts HTTP requests to WebSocket connections and allows all origins.
 var upgrader = websocket.Upgrader{
+	// CheckOrigin allows connections from any origin (for development).
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
 
-// handleMessages sends each broadcast message to all connected clients.
+// handleMessages broadcasts updates to all connected WebSocket clients.
+// It runs continuously, sending each message from the broadcast channel to all clients.
 func handleMessages() {
 	// Read messages from the broadcast channel forever.
 	for msg := range broadcast {
@@ -23,7 +36,7 @@ func handleMessages() {
 			err := client.WriteMessage(websocket.TextMessage, []byte(msg))
 			if err != nil {
 				debugLog("Error sending message to WebSocket: %v", err)
-				// Remove client if sending fails.
+				// Remove client if sending fails (connection broken).
 				delete(clients, client)
 				debugLog("Client disconnected: %s", client.RemoteAddr())
 			}
@@ -49,7 +62,22 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	infoLog("WebSocket connection established: %s", conn.RemoteAddr())
 
-	// Keep the connection open and optionally read messages from client.
+	// 1. SEND SNAPSHOT IMMEDIATELY
+	snapshot := latestSnapshot()
+
+	err = conn.WriteJSON(map[string]interface{}{
+		"type": "snapshot",
+		"data": snapshot,
+	})
+	if err != nil {
+		errorLog("Failed to send snapshot: %v", err)
+		clientsMu.Lock()
+		delete(clients, conn)
+		clientsMu.Unlock()
+		return
+	}
+
+	// 2. Keep the connection alive
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
