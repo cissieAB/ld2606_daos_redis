@@ -273,7 +273,7 @@ Press `Ctrl+C` to stop the simulator gracefully and see final statistics.
 
 ### Stored in Redis
 
-Each packet is stored as a hash with key format:
+`simulator_v2.py` stores each packet as a hash with key format:
 ```
 packet:{dest_ip}:{source_ip}:{timestamp}
 ```
@@ -289,6 +289,8 @@ Fields:
 - `tcp_bytes` - JSON array of TCP byte counts
 
 TTL: 1 hour (3600 seconds)
+
+For `simulator_v2.py`, node IPs are generated from the configured node count as a bounded ring. For example, `--nodes 5` emits only `10.0.0.1` through `10.0.0.5`, with the final node pointing back to the first.
 
 ## Quick Start
 
@@ -332,10 +334,10 @@ The simulator is a **shared component** used by multiple parts of the system.
    cd ../traffic-simulator  # or stay in this directory
    ./setup.sh
    source venv/bin/activate
-   python3 simulator_bk.py
+   python3 simulator_v2.py --redis-host localhost --nodes 5 --mode 1
    ```
 
-3. **Verify**: Backend logs show received packets, WebSocket broadcasts data
+3. **Verify**: Backend logs show polling activity, and `/latest` or WebSocket clients receive `snapshot`/`update` traffic state.
 
 See [Backend README](../backend/README.md) for backend setup details.
 
