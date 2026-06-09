@@ -62,14 +62,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def generate_packet(node_id: int, timestamp: int, seq: int, bin_no: int) -> Dict:
+def node_id_to_ip(node_id: int) -> str:
+    """Map a simulator node id to a stable private IP address."""
+    return f"192.168.110.{node_id % 256}"
+
+
+def generate_packet(node_id: int, num_nodes: int, timestamp: int, seq: int, bin_no: int) -> Dict:
     """Generate a simulated HPC network packet"""
+    if num_nodes < 1:
+        raise ValueError("num_nodes must be at least 1")
+
+    dest_node_id = (node_id + 1) % num_nodes
     return {
         "timestamp": timestamp,
         "seq": seq,
         "node_id": node_id,
-        "source_ip": f"192.168.{(node_id // 256) % 256}.{node_id % 256}",
-        "dest_ip": f"10.0.{random.randint(1, 255)}.{random.randint(1, 255)}",
+        "source_ip": node_id_to_ip(node_id),
+        "dest_ip": node_id_to_ip(dest_node_id),
         "total_bytes": random.randint(64, 1500),
         "udp_packets": json.dumps([random.randint(64, 1500) for _ in range(bin_no)]),
         "udp_bytes": json.dumps([random.randint(1000, 60000) for _ in range(bin_no)]),
@@ -209,7 +218,13 @@ class HPCNode(threading.Thread):
                 
                 # Generate packet batch (same timestamp for all packets in batch)
                 packets = [
-                    generate_packet(self.node_id, timestamp, self.seq + i, self.config.bin_no)
+                    generate_packet(
+                        self.node_id,
+                        self.config.num_nodes,
+                        timestamp,
+                        self.seq + i,
+                        self.config.bin_no,
+                    )
                     for i in range(self.config.packets_per_second)
                 ]
                 self.seq += self.config.packets_per_second
@@ -432,6 +447,9 @@ def main():
                        help="Storage mode: 1=key-value, 2=key-field-value")
     
     args = parser.parse_args()
+
+    if args.nodes < 1:
+        parser.error("--nodes must be at least 1")
     
     # Create config
     config = SimulatorConfig(
