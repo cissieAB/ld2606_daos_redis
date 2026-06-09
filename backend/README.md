@@ -1,6 +1,6 @@
 # Traffic Backend Server
 
-Real-time traffic data server with Redis pub/sub integration and WebSocket support.
+Real-time traffic data server with Redis polling and WebSocket support.
 
 ## Table of Contents
 
@@ -18,10 +18,11 @@ Real-time traffic data server with Redis pub/sub integration and WebSocket suppo
 
 ## Features
 
-- Redis pub/sub subscription for real-time traffic data
+- Redis polling (1s default): materialized view of latest packet per `src:dest` pair
 - WebSocket broadcasting to connected clients
 - RediSearch integration for querying historical data
 - HTTP REST API for latest traffic data
+- Stale pair pruning when simulator runs replace the active Redis data
 - Configurable debug logging
 
 ## Prerequisites
@@ -56,7 +57,17 @@ curl http://localhost:8080/latest        # Latest traffic data
 
 ```
 backend/
-├── *.go files                       # Source code
+├── main.go                          # Application startup and route wiring
+├── config.go                        # Environment configuration and logging helpers
+├── handlers.go                      # HTTP handlers
+├── websocket.go                     # WebSocket connection management
+├── broadcast.go                     # WebSocket update/snapshot payloads
+├── redis.go                         # Redis startup initialization and polling loop
+├── redis_index.go                   # RediSearch index and query helpers
+├── redis_document.go                # Redis document decoding
+├── state.go                         # In-memory latest src:dest materialized view
+├── types.go                         # API payload shapes
+├── utils.go                         # Small shared helpers
 ├── setup.sh                         # Setup script
 ├── go.mod/go.sum                    # Dependencies
 ├── README.md                        # This file (usage guide)
@@ -85,9 +96,10 @@ REDIS_ADDR=localhost:6379 SERVER_PORT=:9090 go run .
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DEBUG` | `false` | Enable debug logging (`true` or `1`) |
-| `REDIS_ADDR` | `ejfat-6.jlab.org:6379` | Redis server address |
+| `REDIS_ADDR` | `localhost:6379` | Redis server address |
+| `REDIS_DB` | `0` | Redis database number |
 | `SERVER_PORT` | `:8080` | HTTP server port |
-| `REDIS_CHANNEL` | `traffic_channel` | Redis pub/sub channel |
+| `POLL_INTERVAL` | `1s` | How often to poll Redis for latest data |
 
 **Examples:**
 ```bash
@@ -102,17 +114,28 @@ REDIS_ADDR=redis.example.com:6379 SERVER_PORT=:3000 go run .
 Test endpoint that returns "Hello, World!"
 
 ### GET /latest
-Returns the latest traffic data as JSON:
+Returns the current materialized graph state as JSON. The `data` object is keyed by `source_ip:dest_ip`.
 ```json
 {
-  "timestamp": 1770147907,
-  "packet_count": 42,
-  "packets": [...]
+  "type": "snapshot",
+  "data": {
+    "10.0.0.1:10.0.0.2": {
+      "src": "10.0.0.1",
+      "dest": "10.0.0.2",
+      "timestamp": 1770147907,
+      "tcp_packets_total": 4200,
+      "tcp_bytes_total": 2340000,
+      "udp_packets_total": 1300,
+      "udp_bytes_total": 780000,
+      "total_packets": 5500,
+      "total_bytes": 3120000
+    }
+  }
 }
 ```
 
 ### WebSocket /ws
-Real-time traffic data updates. Connect using WebSocket client:
+Real-time traffic data updates. New connections receive a full `snapshot`; normal polls send `update` messages with changed edges. If stale pairs are pruned, the backend sends another full `snapshot`.
 ```javascript
 const ws = new WebSocket('ws://localhost:8080/ws');
 ws.onmessage = (event) => {
@@ -147,10 +170,15 @@ The server uses three logging levels:
 ### Code Organization
 The code is organized into focused modules:
 - `config.go` - Configuration and logging
-- `redis.go` - Redis operations and pub/sub
-- `websocket.go` - WebSocket handling
+- `redis.go` - Redis initialization and polling flow
+- `redis_index.go` - RediSearch index and packet queries
+- `redis_document.go` - Redis document decoding
+- `state.go` - Materialized latest `src:dest` state and pruning
+- `broadcast.go` - WebSocket update/snapshot payloads
+- `websocket.go` - WebSocket connection handling
 - `handlers.go` - HTTP endpoint handlers
 - `types.go` - Data structures
+- `utils.go` - Small shared helpers
 
 ### Mock Data Generation
 
@@ -159,7 +187,7 @@ Use the shared traffic simulator:
 cd ../traffic-simulator
 ./setup.sh                           # First time only
 source venv/bin/activate
-python simulator.py --redis-host localhost
+python simulator_v2.py --redis-host localhost --mode 1  # timestamps in unix seconds
 ```
 
 See [`../traffic-simulator/README.md`](../traffic-simulator/README.md) for full simulator documentation.

@@ -1,22 +1,28 @@
-# LD2606 DAOS Redis Project
+# LDRD Traffic Monitoring
 
-Multi-component system for real-time network traffic monitoring with Redis pub/sub integration and DAOS storage.
+Multi-component system for generating, storing, and visualizing simulated network traffic with Redis Stack, a Go backend, and WebSocket clients.
 
-> 🚀 **Quick Start**: See [GETTING_STARTED.md](GETTING_STARTED.md) for 5-minute setup guide
+> **Quick Start**: See [GETTING_STARTED.md](GETTING_STARTED.md) for the full multi-terminal setup.
 
 ## Components
 
 ### 1. [Backend Server](backend/)
-Real-time traffic monitoring server with WebSocket broadcasting
+Real-time traffic API and WebSocket server.
+
 - **Language**: Go
-- **Features**: Redis pub/sub, WebSocket, RediSearch integration
-- **Purpose**: Receive and broadcast traffic data in real-time
+- **Data source**: Polls Redis Stack / RediSearch for `packet:*` hashes
+- **State model**: Maintains latest traffic per `source_ip:dest_ip` pair
+- **API**: `/latest` returns a `snapshot`; `/ws` streams `snapshot` and `update` messages
+- **Cleanup behavior**: Prunes stale in-memory pairs when simulator runs replace active Redis data
 
 ### 2. [Traffic Simulator](traffic-simulator/) 
-Mock network traffic data generator (shared component)
+High-throughput mock traffic generator.
+
 - **Language**: Python
-- **Features**: Multi-node simulation, configurable packet rates
-- **Purpose**: Generate realistic traffic data for testing
+- **Primary script**: `simulator_v2.py`
+- **Features**: Multi-node simulation, configurable packets/sec, TTL, Redis DB selection, and storage modes
+- **Redis format**: Writes packet hashes using `packet:{dest_ip}:{source_ip}:{timestamp}`
+- **Topology behavior**: Generates bounded node-to-node traffic based on `--nodes`
 - **Used by**: Backend server, DAOS client
 
 ### 3. [DAOS Client](daos-client/)
@@ -28,22 +34,28 @@ Data persistence layer (to be implemented)
 ## Architecture
 
 ```
-┌─────────────────┐
-│  Redis Server   │
-│  (RediSearch)   │
-└────┬────────┬───┘
-     │        │
-     │        └─────────┐
-     ↓                  ↓
-┌────────────┐   ┌─────────────┐
-│  Backend   │   │ DAOS Client │
-│  (Go)      │   │             │
-└─────┬──────┘   └─────────────┘
-      │
-      ↓ WebSocket
-┌─────────────┐
-│ Web Clients │
-└─────────────┘
+┌──────────────────────┐
+│ Traffic Simulator v2 │
+│ Python threads       │
+└──────────┬───────────┘
+           │ packet:* hashes
+           ↓
+┌──────────────────────┐
+│ Redis Stack          │
+│ Redis + RediSearch   │
+└──────┬─────────┬─────┘
+       │         │
+       │         └──────────────┐
+       ↓                        ↓
+┌──────────────────────┐   ┌─────────────┐
+│ Backend Server       │   │ DAOS Client │
+│ Go polling + state   │   │             │
+└──────────┬───────────┘   └─────────────┘
+           │ WebSocket /ws
+           ↓
+┌──────────────────────┐
+│ Frontend / Web Client│
+└──────────────────────┘
 ```
 
 ## Repository Structure
@@ -56,7 +68,8 @@ ld2606_daos_redis/
 │   ├── setup.sh                 # Setup script
 │   └── README.md                # Backend documentation
 ├── traffic-simulator/           # Shared mock generator
-│   ├── simulator.py             # Python simulator
+│   ├── simulator_v2.py          # Current Redis hash simulator
+│   ├── simulator_bk.py          # Older simulator flow
 │   ├── setup.sh                 # Setup script
 │   └── README.md                # Simulator documentation
 ├── daos-client/                 # DAOS client (TBD)
