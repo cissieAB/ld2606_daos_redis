@@ -1,0 +1,51 @@
+services:
+  redis:
+    image: redis/redis-stack-server:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    command: go run .
+    environment:
+      REDIS_ADDR: redis:6379
+      SERVER_PORT: :8080
+      POLL_INTERVAL: 1s
+      DEBUG: true
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  simulator:
+    profiles: ["tools"]
+    build:
+      context: ./traffic-simulator
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    command: sleep infinity
+    volumes:
+      - ./traffic-simulator:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis-data:
+  go-mod-cache:
+  go-build-cache:
