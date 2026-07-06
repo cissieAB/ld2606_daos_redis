@@ -33,8 +33,9 @@ func main() {
 	go handleMessages()
 
 	http.HandleFunc("/ws", handleWebSocket)
-	http.HandleFunc("/", handleRoot)
 	http.HandleFunc("/latest", handleLatest)
+	http.HandleFunc("/edge", handleEdge)
+	http.HandleFunc("/", handleRoot)
 
 	infoLog("Starting server on %s (Debug: %v, Poll: %s)", config.ServerPort, config.Debug, config.PollInterval)
 	if err := http.ListenAndServe(config.ServerPort, nil); err != nil {

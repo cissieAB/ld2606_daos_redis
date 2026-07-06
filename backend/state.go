@@ -70,9 +70,10 @@ func generateEdgeSummary(packet Packet) PacketSummary {
 	udpBytesTotal := Sum(packet.UDPBytes)
 
 	return PacketSummary{
-		Src:       packet.Src,
-		Dest:      packet.Dest,
-		Timestamp: packet.Timestamp,
+		Src:              packet.Src,
+		Dest:             packet.Dest,
+		Timestamp:        packet.Timestamp,
+		SamplesPerSecond: packet.SamplesPerSecond,
 
 		TCPPacketsTotal: tcpPacketsTotal,
 		TCPBytesTotal:   tcpBytesTotal,
@@ -83,6 +84,27 @@ func generateEdgeSummary(packet Packet) PacketSummary {
 		TotalPackets: tcpPacketsTotal + udpPacketsTotal,
 		TotalBytes:   tcpBytesTotal + udpBytesTotal,
 	}
+}
+
+func latestEdgeDetail(src, dest string) (EdgeDetail, bool) {
+	latestMu.RLock()
+	defer latestMu.RUnlock()
+
+	packet, ok := latest[pairKey(src, dest)]
+	if !ok {
+		return EdgeDetail{}, false
+	}
+
+	return EdgeDetail{
+		Src:              packet.Src,
+		Dest:             packet.Dest,
+		Timestamp:        packet.Timestamp,
+		SamplesPerSecond: packet.SamplesPerSecond,
+		UDPPackets:       append([]int(nil), packet.UDPPackets...),
+		UDPBytes:         append([]int(nil), packet.UDPBytes...),
+		TCPPackets:       append([]int(nil), packet.TCPPackets...),
+		TCPBytes:         append([]int(nil), packet.TCPBytes...),
+	}, true
 }
 
 func pruneStalePackets(cutoff int) int {

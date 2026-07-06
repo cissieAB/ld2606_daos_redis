@@ -49,6 +49,7 @@ func docToPacket(doc redis.Document) (Packet, error) {
 	p.NodeID = mustInt("node_id")
 	p.Src = mustStr("source_ip")
 	p.Dest = mustStr("dest_ip")
+	p.SamplesPerSecond = mustInt("samples_per_second")
 	p.TotalBytes = mustInt("total_bytes")
 	p.UDPPackets = decode("udp_packets")
 	p.UDPBytes = decode("udp_bytes")

@@ -28,3 +28,30 @@ func handleLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// handleEdge returns the latest full sample arrays for one directed edge.
+func handleEdge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	src := r.URL.Query().Get("src")
+	dest := r.URL.Query().Get("dest")
+	if src == "" || dest == "" {
+		http.Error(w, "Both src and dest query parameters are required", http.StatusBadRequest)
+		return
+	}
+
+	detail, ok := latestEdgeDetail(src, dest)
+	if !ok {
+		http.Error(w, "Edge not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(detail); err != nil {
+		http.Error(w, "Failed to encode edge", http.StatusInternalServerError)
+	}
+}
