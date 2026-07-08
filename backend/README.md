@@ -135,7 +135,23 @@ Returns the current materialized graph state as JSON. The `data` object is keyed
 ```
 
 ### WebSocket /ws
-Real-time traffic data updates. New connections receive a full `snapshot`; normal polls send `update` messages with changed edges. If stale pairs are pruned, the backend sends another full `snapshot`.
+Real-time traffic data updates. New connections receive a full `snapshot` containing the current static node topology and edge summaries. Normal polls send `update` messages with changed edges and no topology. If stale pairs are pruned, the backend sends another edge `snapshot`; topology is read once when each WebSocket connection is established.
+
+```json
+{
+  "type": "snapshot",
+  "topology": {
+    "nodes": {
+      "192.168.110.1": {
+        "ip": "192.168.110.1",
+        "rack": "rack-1"
+      }
+    }
+  },
+  "data": {}
+}
+```
+
 ```javascript
 const ws = new WebSocket('ws://localhost:8080/ws');
 ws.onmessage = (event) => {

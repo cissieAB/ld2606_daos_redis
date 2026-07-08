@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -46,7 +47,14 @@ func handleMessages() {
 }
 
 // handleWebSocket handles WebSocket connections for real-time updates.
-func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+func handleWebSocket(rdb *redis.Client, w http.ResponseWriter, r *http.Request) {
+	topology, err := loadTopology(r.Context(), rdb)
+	if err != nil {
+		errorLog("Failed to load topology for WebSocket snapshot: %v", err)
+		http.Error(w, "Failed to load topology", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Upgrade HTTP connection to WebSocket.
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -55,19 +63,15 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Register this client for broadcasts.
-	clientsMu.Lock()
-	clients[conn] = true
-	clientsMu.Unlock()
-
 	infoLog("WebSocket connection established: %s", conn.RemoteAddr())
 
 	// 1. SEND SNAPSHOT IMMEDIATELY
 	snapshot := latestSnapshot()
 
 	err = conn.WriteJSON(map[string]interface{}{
-		"type": "snapshot",
-		"data": snapshot,
+		"type":     "snapshot",
+		"topology": topology,
+		"data":     snapshot,
 	})
 	if err != nil {
 		errorLog("Failed to send snapshot: %v", err)
@@ -76,6 +80,11 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		clientsMu.Unlock()
 		return
 	}
+
+	// Register only after the initial snapshot so it is always the first message.
+	clientsMu.Lock()
+	clients[conn] = true
+	clientsMu.Unlock()
 
 	// 2. Keep the connection alive
 	for {
