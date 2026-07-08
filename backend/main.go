@@ -37,6 +37,14 @@ func main() {
 	})
 	http.HandleFunc("/latest", handleLatest)
 	http.HandleFunc("/edge", handleEdge)
+	http.HandleFunc("/history", handleHistory(func(
+		ctx context.Context,
+		start int,
+		end int,
+		limit int,
+	) (HistoryResponse, error) {
+		return loadHistory(ctx, rdb, start, end, limit)
+	}))
 	http.HandleFunc("/", handleRoot)
 
 	infoLog("Starting server on %s (Debug: %v, Poll: %s)", config.ServerPort, config.Debug, config.PollInterval)

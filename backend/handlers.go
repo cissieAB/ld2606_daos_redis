@@ -2,10 +2,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 )
+
+type historyLoader func(context.Context, int, int, int) (HistoryResponse, error)
 
 // handleRoot is a basic health check endpoint.
 func handleRoot(w http.ResponseWriter, r *http.Request) {
@@ -54,4 +58,65 @@ func handleEdge(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(detail); err != nil {
 		http.Error(w, "Failed to encode edge", http.StatusInternalServerError)
 	}
+}
+
+func handleHistory(load historyLoader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		start, err := requiredNonNegativeInt(r, "start")
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		end, err := requiredNonNegativeInt(r, "end")
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if start > end {
+			writeJSONError(w, http.StatusBadRequest, "start must be less than or equal to end")
+			return
+		}
+
+		limit := defaultHistoryLimit
+		if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+			limit, err = strconv.Atoi(rawLimit)
+			if err != nil || limit < 1 || limit > maxHistoryLimit {
+				writeJSONError(w, http.StatusBadRequest, "limit must be between 1 and 120")
+				return
+			}
+		}
+
+		response, err := load(r.Context(), start, end, limit)
+		if err != nil {
+			errorLog("History query failed: %v", err)
+			writeJSONError(w, http.StatusServiceUnavailable, "history unavailable")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			errorLog("Failed to encode history response: %v", err)
+		}
+	}
+}
+
+func requiredNonNegativeInt(r *http.Request, name string) (int, error) {
+	raw := r.URL.Query().Get(name)
+	value, err := strconv.Atoi(raw)
+	if raw == "" || err != nil || value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", name)
+	}
+	return value, nil
+}
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

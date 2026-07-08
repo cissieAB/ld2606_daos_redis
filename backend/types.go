@@ -59,3 +59,18 @@ type NodeMetadata struct {
 type Topology struct {
 	Nodes map[string]NodeMetadata `json:"nodes"`
 }
+
+// HistoryFrame is one complete lightweight graph snapshot at a stored timestamp.
+type HistoryFrame struct {
+	Timestamp int                      `json:"timestamp"`
+	Data      map[string]PacketSummary `json:"data"`
+}
+
+// HistoryResponse is one timestamp-paginated chunk of graph history.
+type HistoryResponse struct {
+	Start     int            `json:"start"`
+	End       int            `json:"end"`
+	Frames    []HistoryFrame `json:"frames"`
+	NextStart *int           `json:"next_start,omitempty"`
+	HasMore   bool           `json:"has_more"`
+}

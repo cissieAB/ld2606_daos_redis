@@ -160,6 +160,16 @@ ws.onmessage = (event) => {
 };
 ```
 
+### GET /history
+
+Returns timestamp-paginated lightweight graph frames in ascending order. `start` and `end` are inclusive Unix seconds. `limit` defaults to 60 and may not exceed 120 frames. Missing seconds are omitted.
+
+```http
+GET /history?start=1783442400&end=1783442520&limit=60
+```
+
+When `has_more` is true, use `next_start` as the next request's `start`; it is one second after the final returned frame and therefore does not duplicate it. Historical responses contain no topology or TCP/UDP sample arrays.
+
 ## Building
 
 ### Build binary
