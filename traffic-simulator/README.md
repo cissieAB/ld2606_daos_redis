@@ -292,6 +292,19 @@ TTL: 1 hour (3600 seconds)
 
 For `simulator_v2.py`, node IPs are generated from the configured node count as a bounded ring. For example, `--nodes 5` emits only `10.0.0.1` through `10.0.0.5`, with the final node pointing back to the first.
 
+### Simulator v3 topology
+
+Before producing traffic, `simulator_v3.py` registers each stable simulated IP once in Redis:
+
+```text
+topology:node:<ip>  # hash fields: ip, rack
+topology:nodes      # set of all known node IPs
+```
+
+Registration uses idempotent `HSET` and `SADD` operations. Topology keys are persistent and separate from expiring packet hashes. `--nodes-per-rack` controls deterministic rack assignment and defaults to `4`; for example, nodes 1–4 belong to `rack-1` and nodes 5–8 belong to `rack-2`.
+
+The `topology:nodes` set is the topology index and can be read with `SMEMBERS`; each returned IP directly identifies its `topology:node:<ip>` hash.
+
 ## Quick Start
 
 [↑ Back to top](#table-of-contents)

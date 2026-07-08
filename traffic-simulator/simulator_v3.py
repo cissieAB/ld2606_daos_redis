@@ -27,6 +27,11 @@ def node_id_to_ip(node_id: int) -> str:
     return f"192.168.110.{node_id + 1}"
 
 
+def node_id_to_rack(node_id: int, nodes_per_rack: int) -> str:
+    """Assign a stable rack name from the simulated node id."""
+    return f"rack-{node_id // nodes_per_rack + 1}"
+
+
 def generate_bins(samples_per_second: int) -> Dict[str, List[int]]:
     """Generate matching packet-count and byte-total samples for one edge."""
     tcp_packets = [random.randint(0, 1000) for _ in range(samples_per_second)]
@@ -69,6 +74,7 @@ class SimulatorConfig:
     redis_port: int = 6379
     redis_db: int = 0
     num_nodes: int = 5
+    nodes_per_rack: int = 4
     samples_per_second: int = 100
     duration_seconds: int = 10
     ttl_seconds: int = 3600
@@ -213,10 +219,31 @@ class SimulationController:
             self.redis_client.delete(*keys)
         logger.info("Cleaned up %d old traffic keys", len(keys))
 
+        self.register_topology()
+
+    def register_topology(self) -> None:
+        """Persist the complete simulated node topology before traffic starts."""
+        pipeline = self.redis_client.pipeline()
+
+        for node_id in range(self.config.num_nodes):
+            ip = node_id_to_ip(node_id)
+            pipeline.hset(
+                f"topology:node:{ip}",
+                mapping={
+                    "ip": ip,
+                    "rack": node_id_to_rack(node_id, self.config.nodes_per_rack),
+                },
+            )
+            pipeline.sadd("topology:nodes", ip)
+
+        pipeline.execute()
+        logger.info("Registered topology for %d nodes", self.config.num_nodes)
+
     def run(self) -> None:
         edge_count = self.config.num_nodes * (self.config.num_nodes - 1)
         logger.info("HPC TRAFFIC SIMULATOR v3")
         logger.info("Nodes: %d", self.config.num_nodes)
+        logger.info("Nodes per rack: %d", self.config.nodes_per_rack)
         logger.info("Directed edges: %d", edge_count)
         logger.info("Samples per second: %d", self.config.samples_per_second)
         logger.info(
@@ -289,6 +316,12 @@ def parse_args() -> SimulatorConfig:
     parser.add_argument("--redis-db", type=int, default=0)
     parser.add_argument("--nodes", type=int, default=5)
     parser.add_argument(
+        "--nodes-per-rack",
+        type=int,
+        default=4,
+        help="Number of sequential simulated node IPs assigned to each rack",
+    )
+    parser.add_argument(
         "--samples-per-second",
         "--sps",
         dest="samples_per_second",
@@ -303,6 +336,8 @@ def parse_args() -> SimulatorConfig:
 
     if args.nodes < 1 or args.nodes > 255:
         parser.error("--nodes must be between 1 and 255")
+    if args.nodes_per_rack < 1:
+        parser.error("--nodes-per-rack must be at least 1")
     if args.samples_per_second < 1:
         parser.error("--samples-per-second/--sps must be at least 1")
     if args.duration < 1:
@@ -317,6 +352,7 @@ def parse_args() -> SimulatorConfig:
         redis_port=args.redis_port,
         redis_db=args.redis_db,
         num_nodes=args.nodes,
+        nodes_per_rack=args.nodes_per_rack,
         samples_per_second=args.samples_per_second,
         duration_seconds=args.duration,
         ttl_seconds=args.ttl,
