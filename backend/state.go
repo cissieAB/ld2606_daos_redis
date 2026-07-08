@@ -95,6 +95,10 @@ func latestEdgeDetail(src, dest string) (EdgeDetail, bool) {
 		return EdgeDetail{}, false
 	}
 
+	return generateEdgeDetail(packet), true
+}
+
+func generateEdgeDetail(packet Packet) EdgeDetail {
 	return EdgeDetail{
 		Src:              packet.Src,
 		Dest:             packet.Dest,
@@ -104,7 +108,7 @@ func latestEdgeDetail(src, dest string) (EdgeDetail, bool) {
 		UDPBytes:         append([]int(nil), packet.UDPBytes...),
 		TCPPackets:       append([]int(nil), packet.TCPPackets...),
 		TCPBytes:         append([]int(nil), packet.TCPBytes...),
-	}, true
+	}
 }
 
 func pruneStalePackets(cutoff int) int {
