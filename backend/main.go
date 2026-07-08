@@ -32,7 +32,9 @@ func main() {
 	go startRedisPoller(ctx, rdb)
 	go handleMessages()
 
-	http.HandleFunc("/ws", handleWebSocket)
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		handleWebSocket(rdb, w, r)
+	})
 	http.HandleFunc("/latest", handleLatest)
 	http.HandleFunc("/edge", handleEdge)
 	http.HandleFunc("/", handleRoot)
