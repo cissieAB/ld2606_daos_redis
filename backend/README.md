@@ -170,6 +170,22 @@ GET /history?start=1783442400&end=1783442520&limit=60
 
 When `has_more` is true, use `next_start` as the next request's `start`; it is one second after the final returned frame and therefore does not duplicate it. Historical responses contain no topology or TCP/UDP sample arrays.
 
+### GET /edge
+
+Without a timestamp, returns the latest full sample arrays for one directed edge:
+
+```http
+GET /edge?src=192.168.110.1&dest=192.168.110.2
+```
+
+Add an exact Unix timestamp to retrieve that stored edge-second without falling back to the nearest or latest record:
+
+```http
+GET /edge?src=192.168.110.1&dest=192.168.110.2&timestamp=1783442400
+```
+
+Timestamped requests return `400` for invalid IP addresses or timestamps, `404` when the exact record is unavailable or expired, and `503` when Redis is unavailable. The response schema is identical to the latest edge-detail response.
+
 ## Building
 
 ### Build binary

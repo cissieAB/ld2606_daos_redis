@@ -36,7 +36,9 @@ func main() {
 		handleWebSocket(rdb, w, r)
 	})
 	http.HandleFunc("/latest", handleLatest)
-	http.HandleFunc("/edge", handleEdge)
+	http.HandleFunc("/edge", func(w http.ResponseWriter, r *http.Request) {
+		handleEdgeRequest(rdb, w, r)
+	})
 	http.HandleFunc("/history", handleHistory(func(
 		ctx context.Context,
 		start int,

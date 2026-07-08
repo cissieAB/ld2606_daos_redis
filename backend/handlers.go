@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type historyLoader func(context.Context, int, int, int) (HistoryResponse, error)
@@ -57,6 +60,48 @@ func handleEdge(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(detail); err != nil {
 		http.Error(w, "Failed to encode edge", http.StatusInternalServerError)
+	}
+}
+
+func handleEdgeRequest(rdb *redis.Client, w http.ResponseWriter, r *http.Request) {
+	if !r.URL.Query().Has("timestamp") {
+		handleEdge(w, r)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	src := r.URL.Query().Get("src")
+	dest := r.URL.Query().Get("dest")
+	if net.ParseIP(src) == nil || net.ParseIP(dest) == nil {
+		writeJSONError(w, http.StatusBadRequest, "src and dest must be valid IP addresses")
+		return
+	}
+
+	timestamp, err := requiredNonNegativeInt(r, "timestamp")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	detail, ok, err := historicalEdgeDetail(r.Context(), rdb, src, dest, timestamp)
+	if err != nil {
+		errorLog("Historical edge query failed: %v", err)
+		writeJSONError(w, http.StatusServiceUnavailable, "history unavailable")
+		return
+	}
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "edge detail unavailable")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(detail); err != nil {
+		errorLog("Failed to encode historical edge response: %v", err)
 	}
 }
 
