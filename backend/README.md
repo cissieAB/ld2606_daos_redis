@@ -18,11 +18,11 @@ Real-time traffic data server with Redis polling and WebSocket support.
 
 ## Features
 
-- Redis polling (1s default): materialized view of latest packet per `src:dest` pair
+- Redis polling (1s default): live frame selected from the newest timestamp inside the safety window
 - WebSocket broadcasting to connected clients
 - RediSearch integration for querying historical data
 - HTTP REST API for latest traffic data
-- Stale pair pruning when simulator runs replace the active Redis data
+- Authoritative live snapshots that clear when no timestamp is available in the safety window
 - Configurable debug logging
 
 ## Prerequisites
@@ -65,7 +65,7 @@ backend/
 ├── redis.go                         # Redis startup initialization and polling loop
 ├── redis_index.go                   # RediSearch index and query helpers
 ├── redis_document.go                # Redis document decoding
-├── state.go                         # In-memory latest src:dest materialized view
+├── state.go                         # In-memory selected live frame
 ├── types.go                         # API payload shapes
 ├── utils.go                         # Small shared helpers
 ├── setup.sh                         # Setup script
@@ -114,7 +114,7 @@ REDIS_ADDR=redis.example.com:6379 SERVER_PORT=:3000 go run .
 Test endpoint that returns "Hello, World!"
 
 ### GET /latest
-Returns the current materialized graph state as JSON. The `data` object is keyed by `source_ip:dest_ip`.
+Returns the current live graph state as JSON. On each Redis poll, the backend queries the safety window, chooses the newest stored timestamp in that window, and rebuilds `/latest` from only that timestamp. If the window has no timestamp, `data` is empty. The `data` object is keyed by `source_ip:dest_ip`.
 ```json
 {
   "type": "snapshot",
@@ -135,7 +135,7 @@ Returns the current materialized graph state as JSON. The `data` object is keyed
 ```
 
 ### WebSocket /ws
-Real-time traffic data updates. New connections receive a full `snapshot` containing the current static node topology and edge summaries. Normal polls send `update` messages with changed edges and no topology. If stale pairs are pruned, the backend sends another edge `snapshot`; topology is read once when each WebSocket connection is established.
+Real-time traffic data updates. New connections receive a full `snapshot` containing the current static node topology and edge summaries. Each poll broadcasts an authoritative edge `update` for the newest timestamp in the safety window, or an empty snapshot when no live timestamp is available. Topology is read once when each WebSocket connection is established.
 
 ```json
 {
@@ -215,7 +215,7 @@ The code is organized into focused modules:
 - `redis.go` - Redis initialization and polling flow
 - `redis_index.go` - RediSearch index and packet queries
 - `redis_document.go` - Redis document decoding
-- `state.go` - Materialized latest `src:dest` state and pruning
+- `state.go` - Selected live-frame state
 - `broadcast.go` - WebSocket update/snapshot payloads
 - `websocket.go` - WebSocket connection handling
 - `handlers.go` - HTTP endpoint handlers

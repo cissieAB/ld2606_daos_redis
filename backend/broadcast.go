@@ -20,7 +20,7 @@ func broadcastUpdates(updates map[string]PacketSummary) {
 	}
 }
 
-// broadcastSnapshot sends the complete materialized view when incremental updates are not enough.
+// broadcastSnapshot sends the complete selected live frame.
 func broadcastSnapshot() {
 	payload, err := json.Marshal(map[string]interface{}{
 		"type": "snapshot",

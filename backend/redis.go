@@ -8,7 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// initializeLatestData seeds the materialized view and poll watermark from Redis on startup.
+// initializeLatestData seeds the live frame from the current Redis safety window on startup.
 func initializeLatestData(ctx context.Context, rdb *redis.Client) {
 	if err := ensureSearchIndex(ctx, rdb); err != nil {
 		errorLog("Error ensuring search index: %v", err)
@@ -16,45 +16,31 @@ func initializeLatestData(ctx context.Context, rdb *redis.Client) {
 		return
 	}
 
-	maxTs, err := maxTimestampFromIndex(ctx, rdb)
+	timestamp, packets, err := loadLiveFrame(ctx, rdb, int(time.Now().Unix()))
 	if err != nil {
-		errorLog("Error getting max timestamp: %v", err)
+		errorLog("Error loading live frame: %v", err)
+		initializeEmptyLatest()
+		return
+	}
+	if timestamp == 0 {
+		debugLog("No data found in live window")
 		initializeEmptyLatest()
 		return
 	}
 
-	setStartingTimestamp(maxTs)
-	if maxTs == 0 {
-		debugLog("No data found in index")
-		initializeEmptyLatest()
-		return
-	}
-
-	docs, err := getNewPackets(ctx, rdb)
-	if err != nil {
-		debugLog("Error fetching initial data: %v", err)
-		initializeEmptyLatest()
-		return
-	}
-	if len(docs) == 0 {
-		debugLog("No documents in initial poll window")
-		initializeEmptyLatest()
-		return
-	}
-
-	_, _ = applyDocuments(docs)
+	replaceLatest(packets)
 	latestMu.RLock()
 	count := len(latest)
 	latestMu.RUnlock()
-	infoLog("Initialized materialized view: %d pairs (watermark=%d)", count, getStartingTimestamp())
+	infoLog("Initialized live frame: %d pairs (timestamp=%d)", count, timestamp)
 }
 
-// startRedisPoller keeps the materialized src:dest state current.
+// startRedisPoller keeps the selected live frame current.
 func startRedisPoller(ctx context.Context, rdb *redis.Client) {
 	ticker := time.NewTicker(config.PollInterval)
 	defer ticker.Stop()
 
-	infoLog("Polling Redis every %s for latest src:dest state", config.PollInterval)
+	infoLog("Polling Redis every %s for the selected live frame", config.PollInterval)
 
 	for {
 		select {
@@ -67,39 +53,23 @@ func startRedisPoller(ctx context.Context, rdb *redis.Client) {
 }
 
 func pollRedisOnce(ctx context.Context, rdb *redis.Client) {
-	docs, err := getNewPackets(ctx, rdb)
+	timestamp, packets, err := loadLiveFrame(ctx, rdb, int(time.Now().Unix()))
 	if err != nil {
 		errorLog("Poll error: %v", err)
 		return
 	}
 
-	if len(docs) == 0 {
-		clearLatestIfRedisEmpty(ctx, rdb)
-		debugLog("Poll: no documents in window (watermark=%d)", getStartingTimestamp())
+	if timestamp == 0 {
+		if hasLatestPackets() {
+			initializeEmptyLatest()
+			broadcastSnapshot()
+		}
+		debugLog("Poll: no live frame in window")
 		return
 	}
 
-	updates, pruned := applyDocuments(docs)
-	if pruned {
-		broadcastSnapshot()
-		debugLog("Poll: stale pairs pruned; broadcast snapshot (watermark=%d)", getStartingTimestamp())
-		return
-	}
-
-	if len(updates) == 0 {
-		return
-	}
-
-	broadcastUpdates(updates)
-	debugLog("Poll: %d updates (watermark=%d)", len(updates), getStartingTimestamp())
-}
-
-func clearLatestIfRedisEmpty(ctx context.Context, rdb *redis.Client) {
-	maxTs, err := maxTimestampFromIndex(ctx, rdb)
-	if err != nil || maxTs != 0 || !hasLatestPackets() {
-		return
-	}
-
-	initializeEmptyLatest()
-	broadcastSnapshot()
+	replaceLatest(packets)
+	snapshot := latestSnapshot()
+	broadcastUpdates(snapshot)
+	debugLog("Poll: live update timestamp=%d pairs=%d", timestamp, len(snapshot))
 }

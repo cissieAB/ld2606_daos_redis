@@ -2,8 +2,6 @@ package main
 
 import (
 	"sync"
-
-	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -12,55 +10,23 @@ const (
 )
 
 var (
-	// latest is the materialized view: latest packet per "source_ip:dest_ip" pair.
+	// latest is the selected live frame keyed by "source_ip:dest_ip".
 	latest   = make(map[string]Packet)
 	latestMu sync.RWMutex
-
-	// startingTimestamp tracks the Redis poll watermark.
-	startingTimestamp int
 )
 
-func pollSinceTimestamp() int {
-	since := startingTimestamp - safetyWindow
-	if since < 0 {
-		return 0
-	}
-	return since
-}
-
-func setStartingTimestamp(ts int) {
-	startingTimestamp = ts
-}
-
-func getStartingTimestamp() int {
-	return startingTimestamp
-}
-
-func upsertPacket(packet Packet) bool {
-	key := pairKey(packet.Src, packet.Dest)
-
-	incomingTs := packet.Timestamp
-	if incomingTs == 0 {
-		return false
+func replaceLatest(packets []Packet) {
+	next := make(map[string]Packet, len(packets))
+	for _, packet := range packets {
+		if !validHistoryPacket(packet) {
+			continue
+		}
+		next[pairKey(packet.Src, packet.Dest)] = packet
 	}
 
 	latestMu.Lock()
-	defer latestMu.Unlock()
-
-	if existing, exists := latest[key]; exists {
-		existingTs := existing.Timestamp
-
-		if incomingTs < existingTs {
-			return false
-		}
-
-		if packet.Key != "" && packet.Key == existing.Key {
-			return false
-		}
-	}
-
-	latest[key] = packet
-	return true
+	latest = next
+	latestMu.Unlock()
 }
 
 func generateEdgeSummary(packet Packet) PacketSummary {
@@ -111,51 +77,6 @@ func generateEdgeDetail(packet Packet) EdgeDetail {
 	}
 }
 
-func pruneStalePackets(cutoff int) int {
-	latestMu.Lock()
-	defer latestMu.Unlock()
-
-	pruned := 0
-	for key, packet := range latest {
-		if packet.Timestamp < cutoff {
-			delete(latest, key)
-			pruned++
-		}
-	}
-	return pruned
-}
-
-// applyDocuments updates the materialized view and reports incremental updates plus prune status.
-func applyDocuments(docs []redis.Document) (map[string]PacketSummary, bool) {
-	updates := make(map[string]PacketSummary, len(docs))
-	maxTs := getStartingTimestamp()
-
-	for _, doc := range docs {
-		packet, err := docToPacket(doc)
-		if err != nil {
-			debugLog("Skipping document: %v", err)
-			continue
-		}
-
-		if packet.Src == "" || packet.Dest == "" {
-			continue
-		}
-
-		if packet.Timestamp > maxTs {
-			maxTs = packet.Timestamp
-		}
-
-		if upsertPacket(packet) {
-			key := pairKey(packet.Src, packet.Dest)
-			updates[key] = generateEdgeSummary(packet)
-		}
-	}
-
-	setStartingTimestamp(maxTs)
-	pruned := pruneStalePackets(pollSinceTimestamp())
-	return updates, pruned > 0
-}
-
 func latestSnapshot() map[string]PacketSummary {
 	latestMu.RLock()
 	defer latestMu.RUnlock()
@@ -178,6 +99,5 @@ func initializeEmptyLatest() {
 	latest = make(map[string]Packet)
 	latestMu.Unlock()
 
-	setStartingTimestamp(0)
-	debugLog("Initialized with empty materialized view")
+	debugLog("Initialized with empty live frame")
 }

@@ -1,6 +1,6 @@
 // Package main implements a real-time traffic data server.
-// It connects to Redis, polls for packet data, maintains a materialized view of
-// the latest packets per source:destination pair, and serves this data via HTTP
+// It connects to Redis, polls for packet data, maintains the selected live frame,
+// and serves this data via HTTP
 // and WebSocket endpoints for real-time updates.
 package main
 
