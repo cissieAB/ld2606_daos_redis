@@ -18,6 +18,7 @@ type Config struct {
 	RedisDB      int
 	ServerPort   string
 	PollInterval time.Duration
+	TopologyPath string
 }
 
 var config Config
@@ -43,6 +44,7 @@ func initConfig() {
 		RedisDB:      redisDB,
 		ServerPort:   getEnv("SERVER_PORT", ":8080"),
 		PollInterval: pollInterval,
+		TopologyPath: getEnv("TOPOLOGY_PATH", "config/topology.json"),
 	}
 }
 

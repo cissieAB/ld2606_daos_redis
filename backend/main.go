@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -13,6 +14,12 @@ func main() {
 	initConfig()
 
 	ctx := context.Background()
+	topology, err := loadTopology(config.TopologyPath)
+	if err != nil {
+		errorLog("Failed to load topology from %s: %v", config.TopologyPath, err)
+		os.Exit(1)
+	}
+	infoLog("Loaded %d topology nodes from %s", len(topology.Nodes), config.TopologyPath)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.RedisAddr,
@@ -33,7 +40,7 @@ func main() {
 	go handleMessages()
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		handleWebSocket(rdb, w, r)
+		handleWebSocket(topology, w, r)
 	})
 	http.HandleFunc("/latest", handleLatest)
 	http.HandleFunc("/edge", func(w http.ResponseWriter, r *http.Request) {
