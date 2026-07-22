@@ -57,8 +57,10 @@ curl http://localhost:8080/latest        # Latest traffic data
 
 ```
 backend/
+├── config/topology.json             # Static IP-to-rack node topology
 ├── main.go                          # Application startup and route wiring
 ├── config.go                        # Environment configuration and logging helpers
+├── topology.go                      # Static topology loading and validation
 ├── handlers.go                      # HTTP handlers
 ├── websocket.go                     # WebSocket connection management
 ├── broadcast.go                     # WebSocket update/snapshot payloads
@@ -100,6 +102,7 @@ REDIS_ADDR=localhost:6379 SERVER_PORT=:9090 go run .
 | `REDIS_DB` | `0` | Redis database number |
 | `SERVER_PORT` | `:8080` | HTTP server port |
 | `POLL_INTERVAL` | `1s` | How often to poll Redis for latest data |
+| `TOPOLOGY_PATH` | `config/topology.json` | Static node topology file |
 
 **Examples:**
 ```bash
@@ -135,7 +138,12 @@ Returns the current live graph state as JSON. On each Redis poll, the backend qu
 ```
 
 ### WebSocket /ws
-Real-time traffic data updates. New connections receive a full `snapshot` containing the current static node topology and edge summaries. Each poll broadcasts an authoritative edge `update` for the newest timestamp in the safety window, or an empty snapshot when no live timestamp is available. Topology is read once when each WebSocket connection is established.
+Real-time traffic data updates. The backend loads and validates the static node
+topology from `config/topology.json` at startup. `TOPOLOGY_PATH` can select a
+different file. New connections receive a full `snapshot` containing that
+topology and the current edge summaries. Each poll broadcasts an authoritative
+edge `update` for the newest timestamp in the safety window, or an empty snapshot
+when no live timestamp is available.
 
 ```json
 {
@@ -212,6 +220,7 @@ The server uses three logging levels:
 ### Code Organization
 The code is organized into focused modules:
 - `config.go` - Configuration and logging
+- `topology.go` - Static topology loading and validation
 - `redis.go` - Redis initialization and polling flow
 - `redis_index.go` - RediSearch index and packet queries
 - `redis_document.go` - Redis document decoding

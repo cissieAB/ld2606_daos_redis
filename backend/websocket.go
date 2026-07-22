@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -47,14 +46,7 @@ func handleMessages() {
 }
 
 // handleWebSocket handles WebSocket connections for real-time updates.
-func handleWebSocket(rdb *redis.Client, w http.ResponseWriter, r *http.Request) {
-	topology, err := loadTopology(r.Context(), rdb)
-	if err != nil {
-		errorLog("Failed to load topology for WebSocket snapshot: %v", err)
-		http.Error(w, "Failed to load topology", http.StatusServiceUnavailable)
-		return
-	}
-
+func handleWebSocket(topology Topology, w http.ResponseWriter, r *http.Request) {
 	// Upgrade HTTP connection to WebSocket.
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
