@@ -1,140 +1,51 @@
-# Getting Started with ld2606_daos_redis
+# Getting started
 
-Quick guide to get the entire system running in 5 minutes.
+For the complete simulator or real-telemetry workflow, including frontend startup and per-node collector setup, see the [eCenter setup guide](https://github.com/cissieAB/eCenter/blob/main/docs/setup.md).
 
-## Prerequisites
+## Start this repository's services
 
-Install these first:
-- [Docker](https://docs.docker.com/get-docker/) or [Podman](https://podman.io/getting-started/installation)
-- [Go 1.20+](https://go.dev/doc/install)
-- [Python 3.9+](https://www.python.org/downloads/)
+Install Docker with Compose, or Podman with a Compose provider. Go and Python dependencies are supplied by the development images; they are not required on the host for this workflow. Run these commands from the `ld2606_daos_redis` repository root.
 
-## 5-Minute Setup
+For simulated traffic:
 
-### Step 1: Clone Repository
 ```bash
-git clone https://github.com/cissieAB/ld2606_daos_redis.git
-cd ld2606_daos_redis
+docker compose -f compose.dev.yaml --profile tools up --build
 ```
 
-### Step 2: Start Redis
+Keep that terminal running. In another terminal at the same repository root, start the simulator:
+
 ```bash
-docker run -d -p 6379:6379 --name redis-traffic redis/redis-stack-server:latest
+docker compose -f compose.dev.yaml exec simulator python3 simulator_v2.py --redis-host redis --duration 3600 --mode 1
 ```
 
-### Step 3: Setup Backend
+The simulator container starts idle. Its image already installs Python dependencies, so virtual environment activation is unnecessary. `redis` is the Compose service hostname; `localhost` inside the simulator would refer to that container. Mode 1 writes backend-compatible hashes. The explicit duration is one hour; V2 defaults to 10 seconds.
+
+The simulator clears existing `packet:*` records in its selected Redis database at startup. Run it separately from real telemetry when those records need to be retained.
+
+For real telemetry, start only Redis and the backend:
+
 ```bash
-cd backend
-./setup.sh
+podman compose -f compose.dev.yaml up
 ```
 
-### Step 4: Setup Traffic Simulator
-```bash
-cd ../traffic-simulator
-./setup.sh
-```
+Use `docker compose` or `podman compose` consistently with your chosen engine. The `tools` profile is only needed for the simulator. Follow the eCenter guide to attach TC ingress and start collectors on the monitored nodes.
 
-### Step 5: Run Everything
+## Verify and stop
 
-**Terminal 1 - Backend Server:**
-```bash
-cd backend
-go run .
-```
+From another terminal at the repository root:
 
-**Terminal 2 - Traffic Simulator:**
 ```bash
-cd traffic-simulator
-source venv/bin/activate
-python simulator.py
-```
-
-**Terminal 3 - Test:**
-```bash
-# Test REST API
-curl http://localhost:8080/
+docker compose -f compose.dev.yaml ps
+docker compose -f compose.dev.yaml exec redis redis-cli ping
 curl http://localhost:8080/latest
-
-# Test WebSocket (requires websocat or browser console)
-websocat ws://localhost:8080/ws
 ```
 
-## What You Should See
+Substitute `podman compose` if using Podman. Redis should return `PONG`; `/latest` returns the current snapshot and can be empty before traffic arrives. Compose publishes Redis on port `6379` and the backend on `8080`.
 
-**Backend (Terminal 1):**
-```
-[INFO] Index 'idx:packets' created successfully
-[INFO] Initialized with data: timestamp=1770147907 packet_count=42 packets=42
-[INFO] Subscribed to traffic_channel
-[INFO] Starting server on :8080 (Debug: false)
-```
+Stop the simulator with `Ctrl+C`, then stop the foreground Compose process with `Ctrl+C`.
 
-**Simulator (Terminal 2):**
-```
-✓ Connected to Redis at localhost:6379
-Redis Traffic Simulator
-Nodes: 1, Packets/sec: 100
-[00:05] Total: 500 packets, Published: 500, Stored: 500, Errors: 0
-[00:10] Total: 1,000 packets, Published: 1,000, Stored: 1,000, Errors: 0
-```
+## Component details
 
-## Next Steps
-
-### For Backend Development
-- Read [backend/README.md](backend/README.md)
-- Check [backend/PROJECT_SUMMARY.md](backend/PROJECT_SUMMARY.md) for architecture
-- Enable debug mode: `DEBUG=true go run .`
-
-### For Traffic Simulator
-- Read [traffic-simulator/README.md](traffic-simulator/README.md)
-- Try different configurations
-- Adjust packet rates: `--packets-per-second 500`
-
-### For DAOS Client Development
-- Read [daos-client/README.md](daos-client/README.md)
-- Use traffic simulator for test data
-
-## Common Issues
-
-### "Cannot connect to Redis"
-```bash
-# Check if Redis is running
-docker ps | grep redis
-
-# Restart Redis
-docker restart redis-traffic
-
-# Or start fresh
-docker run -d -p 6379:6379 --name redis-traffic redis/redis-stack-server:latest
-```
-
-### "Port 8080 already in use"
-```bash
-# Use different port
-SERVER_PORT=:9090 go run .
-```
-
-### "Go dependencies fail"
-```bash
-cd backend
-go mod download
-go mod tidy
-```
-
-## Stopping Everything
-
-```bash
-# Stop simulator: Ctrl+C in Terminal 2
-# Stop backend: Ctrl+C in Terminal 1
-# Stop Redis:
-docker stop redis-traffic
-docker rm redis-traffic
-```
-
-## Documentation
-
-- **[Main README](README.md)** - Project overview
-- **[Backend README](backend/README.md)** - Backend server
-- **[Simulator README](traffic-simulator/README.md)** - Traffic generator
-- **[DAOS README](daos-client/README.md)** - DAOS client
-- **[Contributing](CONTRIBUTING.md)** - Development guidelines
+- [Backend](backend/README.md): configuration, topology, APIs, host development, and tests.
+- [Simulator](traffic-simulator/README.md): simulator documentation.
+- [DAOS client](daos-client/README.md): storage component documentation.
