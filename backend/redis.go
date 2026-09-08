@@ -69,7 +69,6 @@ func pollRedisOnce(ctx context.Context, rdb *redis.Client) {
 	}
 
 	replaceLatest(packets)
-	snapshot := latestSnapshot()
-	broadcastUpdates(snapshot)
-	debugLog("Poll: live update timestamp=%d pairs=%d", timestamp, len(snapshot))
+	broadcastSnapshot()
+	debugLog("Poll: live snapshot timestamp=%d pairs=%d", timestamp, len(packets))
 }
