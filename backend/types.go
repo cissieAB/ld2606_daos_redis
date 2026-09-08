@@ -51,8 +51,9 @@ type EdgeDetail struct {
 
 // NodeMetadata describes one statically located network node.
 type NodeMetadata struct {
-	IP   string `json:"ip"`
-	Rack string `json:"rack"`
+	IP       string `json:"ip"`
+	Rack     string `json:"rack"`
+	Hostname string `json:"hostname,omitempty"`
 }
 
 // Topology is the complete IP-keyed node mapping for a WebSocket session.
