@@ -9,7 +9,7 @@ Real-time traffic data server with Redis polling and WebSocket support.
 - [Quick Start](#quick-start)
 - [File Structure](#file-structure)
 - [Running the Server](#running-the-server)
-- [Environment Variables](#environment-variables)
+- [Configuration](#configuration)
 - [API Endpoints](#api-endpoints)
 - [Building](#building)
 - [Development](#development)
@@ -27,31 +27,26 @@ Real-time traffic data server with Redis polling and WebSocket support.
 
 ## Prerequisites
 
-- **Go 1.20+**: [Install Go](https://go.dev/doc/install)
-- **Redis Server**: With RediSearch module (see [Simulator README](../traffic-simulator/README.md#prerequisites) for Docker/Podman setup)
+For the container workflow, install Docker with Compose or Podman with a Compose provider. The development image supplies Go and its dependencies.
 
-> **Note**: This is part of the [ld2606_daos_redis](../README.md) project. See main README for overall architecture.
+For optional host development, use Go matching [go.mod](go.mod) (currently `1.25.5`) and a running Redis Stack instance with RediSearch.
 
 ## Quick Start
 
+Start from the repository root, one directory above `backend`:
+
 ```bash
-# 1. Setup (first time only)
-./setup.sh
-
-# 2. Start Redis
-# On EJFAT Arma Linux machines, try
-# podman run -d -p 6379:6379 --name redis-traffic docker.io/redis/redis-stack-server:latest
-docker run -d -p 6379:6379 redis/redis-stack-server:latest
-
-# 3. Run the server
-go run .
-
-# 4. Test
-curl http://localhost:8080/              # "Hello, World!"
-curl http://localhost:8080/latest        # Latest traffic data
+docker compose -f compose.dev.yaml up --build
 ```
 
-> 💡 **Tip**: See [GETTING_STARTED.md](../GETTING_STARTED.md) for complete multi-component setup
+Use `podman compose` in place of `docker compose` when using Podman. This starts Redis and the backend; it does not start a traffic producer. See [Getting started](../GETTING_STARTED.md) for the simulator commands and the [eCenter setup guide](https://github.com/cissieAB/eCenter/blob/main/docs/setup.md) for the complete workflow with either traffic source and the frontend.
+
+In another terminal:
+
+```bash
+curl http://localhost:8080/
+curl http://localhost:8080/latest
+```
 
 ## File Structure
 
@@ -63,7 +58,7 @@ backend/
 ├── topology.go                      # Static topology loading and validation
 ├── handlers.go                      # HTTP handlers
 ├── websocket.go                     # WebSocket connection management
-├── broadcast.go                     # WebSocket update/snapshot payloads
+├── broadcast.go                     # WebSocket snapshot payloads
 ├── redis.go                         # Redis startup initialization and polling loop
 ├── redis_index.go                   # RediSearch index and query helpers
 ├── redis_document.go                # Redis document decoding
@@ -80,8 +75,10 @@ backend/
 
 ## Running the Server
 
+For optional host development, run the following from the `backend` directory with Redis already available. Stop the containerized backend first to free port `8080`.
+
 ```bash
-# Production (minimal logs)
+# Default logging
 go run .
 
 # Debug mode (detailed logs)
@@ -103,6 +100,8 @@ REDIS_ADDR=localhost:6379 SERVER_PORT=:9090 go run .
 | `SERVER_PORT` | `:8080` | HTTP server port |
 | `POLL_INTERVAL` | `1s` | How often to poll Redis for latest data |
 | `TOPOLOGY_PATH` | `config/topology.json` | Static node topology file |
+
+The table lists application defaults. `compose.dev.yaml` sets `REDIS_ADDR=redis:6379`, `SERVER_PORT=:8080`, `POLL_INTERVAL=1s`, and `DEBUG=true` inside the backend container. Change container settings in the Compose configuration; the shell examples below apply to host execution. Keep port `8080` for the frontend’s existing local proxy.
 
 **Examples:**
 ```bash
@@ -203,9 +202,9 @@ go build -o backend
 ./backend
 ```
 
-### Build with debug enabled
+### Run the binary with debug logging
 ```bash
-DEBUG=1 go build -o backend
+DEBUG=1 ./backend
 ```
 
 ## Logging Levels
@@ -218,6 +217,12 @@ The server uses three logging levels:
 
 ## Development
 
+Run tests from the `backend` directory:
+
+```bash
+go test ./...
+```
+
 ### Code Organization
 The code is organized into focused modules:
 - `config.go` - Configuration and logging
@@ -226,7 +231,7 @@ The code is organized into focused modules:
 - `redis_index.go` - RediSearch index and packet queries
 - `redis_document.go` - Redis document decoding
 - `state.go` - Selected live-frame state
-- `broadcast.go` - WebSocket update/snapshot payloads
+- `broadcast.go` - WebSocket snapshot payloads
 - `websocket.go` - WebSocket connection handling
 - `handlers.go` - HTTP endpoint handlers
 - `types.go` - Data structures
@@ -234,15 +239,7 @@ The code is organized into focused modules:
 
 ### Mock Data Generation
 
-Use the shared traffic simulator:
-```bash
-cd ../traffic-simulator
-./setup.sh                           # First time only
-source venv/bin/activate
-python simulator_v2.py --redis-host localhost --mode 1  # timestamps in unix seconds
-```
-
-See [`../traffic-simulator/README.md`](../traffic-simulator/README.md) for full simulator documentation.
+Use the V2 simulator in the development container as described in [Getting started](../GETTING_STARTED.md). It writes Redis hashes with the fields consumed by this backend, including `samples_per_second`.
 
 ### Technical Details
 

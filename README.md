@@ -1,8 +1,8 @@
 # LDRD Traffic Monitoring
 
-Multi-component system for generating, storing, and visualizing simulated network traffic with Redis Stack, a Go backend, and WebSocket clients.
+Multi-component system for generating, storing, and visualizing network traffic with Redis Stack, a Go backend, and WebSocket clients.
 
-> **Quick Start**: See [GETTING_STARTED.md](GETTING_STARTED.md) for the full multi-terminal setup.
+> **Quick Start**: See [GETTING_STARTED.md](GETTING_STARTED.md) for this repository’s Compose setup, or the [eCenter setup guide](https://github.com/cissieAB/eCenter/blob/main/docs/setup.md) for the complete simulator and real-telemetry workflows.
 
 ## Components
 
@@ -12,8 +12,8 @@ Real-time traffic API and WebSocket server.
 - **Language**: Go
 - **Data source**: Polls Redis Stack / RediSearch for `packet:*` hashes
 - **State model**: Maintains latest traffic per `source_ip:dest_ip` pair
-- **API**: `/latest` returns a `snapshot`; `/ws` streams `snapshot` and `update` messages
-- **Cleanup behavior**: Prunes stale in-memory pairs when simulator runs replace active Redis data
+- **API**: `/latest` returns a `snapshot`; `/ws` streams authoritative `snapshot` messages
+- **Cleanup behavior**: Replaces the live frame on each poll, removing missing edges and clearing traffic when the live window is empty
 
 ### 2. [Traffic Simulator](traffic-simulator/) 
 High-throughput mock traffic generator.
@@ -80,7 +80,7 @@ ld2606_daos_redis/
 
 | Document | Description |
 |----------|-------------|
-| **[GETTING_STARTED.md](GETTING_STARTED.md)** | 5-minute setup guide |
+| **[GETTING_STARTED.md](GETTING_STARTED.md)** | Compose startup and verification |
 | **[README.md](README.md)** | This file - project overview |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Development guidelines |
 | **[backend/README.md](backend/README.md)** | Go server setup and usage |
