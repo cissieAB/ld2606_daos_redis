@@ -2,27 +2,33 @@
   "nodes": {
     "129.57.91.11": {
       "ip": "129.57.91.11",
-      "rack": "rack-1"
+      "rack": "rack-1",
+      "hostname": "host-01"
     },
     "192.168.110.0": {
       "ip": "192.168.110.0",
-      "rack": "rack-1"
+      "rack": "rack-1",
+      "hostname": "host-02"
     },
     "192.168.110.1": {
       "ip": "192.168.110.1",
-      "rack": "rack-1"
+      "rack": "rack-1",
+      "hostname": "host-03"
     },
     "192.168.110.2": {
       "ip": "192.168.110.2",
-      "rack": "rack-1"
+      "rack": "rack-1",
+      "hostname": "host-04"
     },
     "192.168.110.3": {
       "ip": "192.168.110.3",
-      "rack": "rack-2"
+      "rack": "rack-2",
+      "hostname": "host-05"
     },
     "192.168.110.4": {
       "ip": "192.168.110.4",
-      "rack": "rack-2"
+      "rack": "rack-2",
+      "hostname": "host-06"
     }
   }
 }
