@@ -142,8 +142,9 @@ Real-time traffic data updates. The backend loads and validates the static node
 topology from `config/topology.json` at startup. `TOPOLOGY_PATH` can select a
 different file. New connections receive a full `snapshot` containing that
 topology and the current edge summaries. Each poll broadcasts an authoritative
-edge `update` for the newest timestamp in the safety window, or an empty snapshot
-when no live timestamp is available.
+edge `snapshot` for the newest timestamp in the safety window, or an empty snapshot
+when no live timestamp is available. Clients replace their edge state so missing
+edges disappear even while other edges remain active. Poll snapshots omit topology.
 
 ```json
 {

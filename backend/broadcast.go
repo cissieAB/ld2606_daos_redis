@@ -2,24 +2,6 @@ package main
 
 import "encoding/json"
 
-// broadcastUpdates sends incremental edge updates to all WebSocket clients.
-func broadcastUpdates(updates map[string]PacketSummary) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"type": "update",
-		"data": updates,
-	})
-	if err != nil {
-		errorLog("Error encoding broadcast payload: %v", err)
-		return
-	}
-
-	select {
-	case broadcast <- string(payload):
-	default:
-		errorLog("Broadcast channel full, dropping update")
-	}
-}
-
 // broadcastSnapshot sends the complete selected live frame.
 func broadcastSnapshot() {
 	payload, err := json.Marshal(map[string]interface{}{
