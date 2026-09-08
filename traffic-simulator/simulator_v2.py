@@ -75,6 +75,7 @@ def generate_packet(node_id: int, num_nodes: int, timestamp: int, seq: int, bin_
     dest_node_id = (node_id + 1) % num_nodes
     return {
         "timestamp": timestamp,
+        "samples_per_second": bin_no,
         "seq": seq,
         "node_id": node_id,
         "source_ip": node_id_to_ip(node_id),
@@ -142,6 +143,7 @@ class HashStorageWriter:
         """Return packet payload for Redis storage."""
         return {
             "timestamp": packet["timestamp"],
+            "samples_per_second": packet["samples_per_second"],
             "node_id": packet["node_id"],
             "source_ip": packet["source_ip"],
             "dest_ip": packet["dest_ip"],
