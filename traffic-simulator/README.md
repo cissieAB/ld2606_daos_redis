@@ -1,296 +1,127 @@
 # Traffic Simulator
 
-Python script for generating mock network traffic data and publishing to Redis for testing and development.
+`simulator_v2.py` generates synthetic traffic records and stores them in Redis for the [Go backend](../backend/README.md). It does not send network packets through the interfaces monitored by eBPF and does not use Redis pub/sub.
 
-> **Part of**: [ld2606_daos_redis](../README.md) project  
-> **Shared by**: [Backend Server](../backend/README.md) and [DAOS Client](../daos-client/README.md)
+See [Getting started](../GETTING_STARTED.md) for this repository's services and the [eCenter setup guide](https://github.com/cissieAB/eCenter/blob/main/docs/setup.md) for the complete frontend, backend, and traffic-source workflow.
 
-## Table of Contents
+## Run in the development container
 
-1. [Overview & Features](#overview--features)
-2. [Prerequisites](#prerequisites)
-   - [Redis Server](#redis-server)
-3. [Setup](#setup)
-   - [Quick Setup (Recommended) ⭐](#quick-setup-recommended)
-   - [Manual Setup (Alternative)](#manual-setup-alternative)
-4. [Quick Start](#quick-start)
+From the `ld2606_daos_redis` repository root, start the services:
 
-> 📚 **Other Docs**: [Main Project](../README.md) | [Backend](../backend/README.md) | [DAOS Client](../daos-client/README.md)
-5. [Usage](#usage)
-   - [Basic Usage](#basic-usage)
-   - [Advanced Options](#advanced-options)
-   - [Command-Line Arguments](#command-line-arguments)
-   - [Examples](#examples)
-6. [Output](#output)
-7. [Data Format](#data-format)
-8. [Integration with Backend](#integration-with-backend)
-9. [Troubleshooting](#troubleshooting)
-10. [Development](#development)
-
----
-
-## Overview & Features
-
-This simulator generates realistic network packet data with multiple configurable nodes, publishes to Redis pub/sub channels, and stores data in Redis for testing the backend server.
-
-### Features
-
-- **Multi-node simulation**: Simulate multiple traffic sources simultaneously
-- **Configurable packet rate**: Control packets per second per node
-- **Redis pub/sub**: Publish traffic data to Redis channels in real-time
-- **Data persistence**: Store packets as Redis hashes with TTL
-- **Statistics tracking**: Monitor packets generated, published, and stored
-- **Batch processing**: Efficient batch operations for high throughput
-
-## Prerequisites
-
-[↑ Back to top](#table-of-contents)
-
-### Redis Server
-
-The simulator requires a running Redis server. You can either:
-- Use an existing Redis server (production/remote)
-- Run Redis locally using Docker or Podman (recommended for development)
-
-#### Option 1: Local Redis with Docker/Podman
-
-**Using Docker:**
 ```bash
-docker run -d -p 6379:6379 redis/redis-stack-server:latest
+docker compose -f compose.dev.yaml --profile tools up --build
 ```
 
-**Using Podman:**
+Keep that terminal running. In another terminal at the same repository root:
+
 ```bash
-podman run -d -p 6379:6379 redis/redis-stack-server:latest
+docker compose -f compose.dev.yaml exec simulator python3 simulator_v2.py --redis-host redis --duration 3600 --mode 1
 ```
 
-This will:
-- ✅ Start Redis Stack (Redis + RediSearch)
-- ✅ Expose port 6379 on localhost
-- ✅ Run in detached mode (background)
+Use `podman compose` in place of `docker compose` for Podman. The simulator service starts idle; the second command starts generation. Dependencies are already installed in the image, so no virtual environment activation is required.
 
-**Verify Redis is running:**
+To enter the container interactively instead:
+
 ```bash
-# Using Docker
-docker ps
-
-# Using Podman  
-podman ps
+docker compose -f compose.dev.yaml exec simulator /bin/bash
+python3 simulator_v2.py --redis-host redis --duration 3600 --mode 1
 ```
 
-#### Option 2: Remote/Existing Redis Server
+The shell opens in `/app`, where the simulator source is mounted. Compose targets the service name, so there is no need to look up a container ID. `--redis-host redis` uses the Redis service on the Compose network; the default `localhost` would refer to the simulator container itself.
 
-If you have an existing Redis server (e.g., `ejfat-6.jlab.org`), you can use it directly:
-```bash
-python3 simulator_bk.py --redis-host ejfat-6.jlab.org
-```
+The example runs for one hour. Stop generation with `Ctrl+C`; stop the foreground Compose process separately when finished.
 
-**Note:** Make sure the Redis server has RediSearch module installed for the backend to work properly.
+## Optional host execution
 
-## Setup
+For execution outside the container, install Python 3 with virtual environment support and pip. The development image uses Python 3.13. Redis must already be running; the backend requires Redis Stack with RediSearch.
 
-### Quick Setup (Recommended) ⭐
-
-Use the provided setup script to automatically create the virtual environment and install dependencies:
+From this `traffic-simulator` directory:
 
 ```bash
-cd traffic-simulator
-./setup.sh
-```
-
-This will:
-- ✅ Check Python 3 installation
-- ✅ Create virtual environment (`venv/`)
-- ✅ Install all dependencies
-- ✅ Display usage instructions
-
-### Manual Setup (Alternative)
-
-If you prefer to set up manually:
-
-#### 1. Create Python Virtual Environment
-
-```bash
-cd traffic-simulator
-
-# Create virtual environment
 python3 -m venv venv
-
-# Activate virtual environment
 source venv/bin/activate
+python3 -m pip install -r requirements.txt
+python3 simulator_v2.py --redis-host localhost --duration 3600 --mode 1
 ```
 
-#### 2. Install Dependencies
+Use `localhost` when Redis is published on the same host. Otherwise replace it with the Redis machine's reachable hostname or IP. On later runs, activate the environment and run the script; recreate or update dependencies only when needed.
+
+## V2 command-line options
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--redis-host` | `localhost` | Redis hostname or IP; use `redis` inside the Compose simulator container. |
+| `--redis-port` | `6379` | Redis port. |
+| `--redis-db` | `0` | Redis database; match the backend's `REDIS_DB`. |
+| `--nodes` | `5` | Concurrent simulated nodes; must be at least 1. |
+| `--pps` | `100` | Generated records per node per one-second batch. |
+| `--bin-no` | `100` | Length of each TCP/UDP sample array; stored as `samples_per_second`. |
+| `--duration` | `10` | Run duration in seconds. Use a positive duration; zero is not an unlimited-run setting. |
+| `--ttl` | `3600` | Redis key retention in seconds. Use a positive TTL. |
+| `--stats-interval` | `5` | Seconds between progress reports. Zero does not disable reports. |
+| `--mode` | `1` | Storage layout: 1 for the backend-compatible per-edge hash; 2 for timestamp buckets. |
+
+Use positive values for `--pps` and `--bin-no`. `--pps` controls generated writes, while `--bin-no` controls sample resolution. They are independent. V2 does not accept the older `--publish`, `--storage`, `--channel`, or `--packets-per-second` options.
+
+Display the parser's help without starting a simulation:
 
 ```bash
-pip install -r requirements.txt
+python3 simulator_v2.py --help
 ```
 
-## Usage
-
-### Basic Usage
-
-[↑ Back to top](#table-of-contents)
-
-
-
-Generate traffic with default settings (1 node, 100 packets/sec, publish disabled, storage enabled):
+Run this in the prepared host environment or simulator container. In a host environment, a shorter run with 20 sample bins per second is:
 
 ```bash
-python3 simulator_bk.py --redis-host ejfat-6.jlab.org
+python3 simulator_v2.py --redis-host localhost --nodes 5 --bin-no 20 --duration 60 --mode 1
 ```
 
-**Note:** Default behavior is `--publish False` and `--storage True`.
+## Stored records and topology
 
-### Advanced Options
+At startup, V2 attempts to delete existing `packet:*` keys from its selected Redis database before generating new records. Run it separately from real telemetry when existing records need to be retained.
 
-```bash
-python3 simulator_bk.py \
-  --redis-host ejfat-6.jlab.org \
-  --redis-port 6379 \
-  --nodes 5 \
-  --packets-per-second 200 \
-  --duration 60 \
-  --channel traffic_channel
-```
+Use **mode 1** with the backend. Each record is a Redis hash with key:
 
-### Command-Line Arguments
-
-[↑ Back to top](#table-of-contents)
-
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--redis-host` | `localhost` | Redis server hostname |
-| `--redis-port` | `6379` | Redis server port |
-| `--redis-db` | `0` | Redis database number |
-| `--nodes` | `1` | Number of traffic nodes to simulate |
-| `--packets-per-second` (or `--pps`) | `100` | Packets per second per node |
-| `--duration` | `None` | Duration in seconds (`0` or `None` = infinite / until stopped) |
-| `--publish` | `False` | Enable or disable pub/sub publishing with `True` or `False` |
-| `--storage` | `True` | Enable or disable data storage with `True` or `False` |
-| `--channel` | `traffic_channel` | Redis pub/sub channel name |
-| `--stats-interval` | `5` | Interval in seconds for printing stats (0 to disable) |
-
-### Examples
-
-[↑ Back to top](#table-of-contents)
-
-
-
-### Example 1: Quick Test (10 seconds)
-
-```bash
-python3 simulator_bk.py \
-  --redis-host ejfat-6.jlab.org \
-  --duration 10
-```
-
-### Example 2: High Load Test (5 nodes, 500 pps each)
-
-```bash
-python3 simulator_bk.py \
-  --redis-host ejfat-6.jlab.org \
-  --nodes 5 \
-  --packets-per-second 500
-```
-
-### Example 3: Publish Only (No Storage)
-
-```bash
-# Useful for testing pub/sub without filling Redis
-python3 simulator_bk.py \
-  --redis-host ejfat-6.jlab.org \
-  --publish True \
-  --storage False
-```
-
-### Example 4: Storage Only (No Publishing)
-
-```bash
-# Useful for loading data into Redis without pub/sub
-python3 simulator_bk.py \
-  --redis-host ejfat-6.jlab.org \
-  --publish False \
-  --storage True \
-  --duration 30
-```
-
-### Example 5: Custom Channel
-
-```bash
-python3 simulator_bk.py \
-  --redis-host ejfat-6.jlab.org \
-  --channel my_custom_channel
-```
-
-## Output
-
-[↑ Back to top](#table-of-contents)
-
-The simulator displays real-time statistics every 5 seconds (configurable):
-
-```
-[00:05] Total: 500 packets, Published: 500, Stored: 500, Errors: 0
-[00:10] Total: 1,000 packets, Published: 1,000, Stored: 1,000, Errors: 0
-[00:15] Total: 1,500 packets, Published: 1,500, Stored: 1,500, Errors: 0
-```
-
-**Customize stats interval:**
-```bash
-# Print stats every 10 seconds
-python3 simulator_bk.py --redis-host localhost --stats-interval 10
-
-# Disable periodic stats (only show final summary)
-python3 simulator_bk.py --redis-host localhost --stats-interval 0
-```
-
-Press `Ctrl+C` to stop the simulator gracefully and see final statistics.
-
-## Data Format
-
-[↑ Back to top](#table-of-contents)
-
-### Published Message (JSON)
-
-```json
-{
-  "timestamp": 1770147907,
-  "packet_count": 100,
-  "packets": [
-    {
-      "timestamp": 1770147907,
-      "source_ip": "192.168.45.123",
-      "dest_ip": "10.0.78.234",
-      "total_bytes": 1024,
-      "udp_packets": [...],
-      "udp_bytes": [...],
-      "tcp_packets": [...],
-      "tcp_bytes": [...]
-    }
-  ]
-}
-```
-
-### Stored in Redis
-
-`simulator_v2.py` stores each packet as a hash with key format:
-```
+```text
 packet:{dest_ip}:{source_ip}:{timestamp}
 ```
 
-Fields:
-- `timestamp` - Unix timestamp
-- `source_ip` - Source IP address
-- `dest_ip` - Destination IP address
-- `total_bytes` - Total bytes in packet
-- `udp_packets` - JSON array of UDP packet sizes
-- `udp_bytes` - JSON array of UDP byte counts
-- `tcp_packets` - JSON array of TCP packet sizes
-- `tcp_bytes` - JSON array of TCP byte counts
+| Hash field | Contents |
+| --- | --- |
+| `timestamp` | Unix timestamp in seconds. |
+| `samples_per_second` | The configured `--bin-no`. |
+| `node_id` | Zero-based simulated node ID. |
+| `source_ip`, `dest_ip` | Directed edge endpoints. |
+| `total_bytes` | A separately generated synthetic byte value. |
+| `udp_packets`, `tcp_packets` | JSON arrays of synthetic packet counts. |
+| `udp_bytes`, `tcp_bytes` | JSON arrays of synthetic byte counts. |
 
-TTL: 1 hour (3600 seconds)
+Each sample array has `--bin-no` entries. Values are randomly generated; `total_bytes` is not calculated by summing the byte arrays. Repeated writes for the same edge and second overwrite the same hash, so `--pps` is not the number of distinct stored edge-second keys. Each write applies the configured TTL.
 
-For `simulator_v2.py`, node IPs are generated from the configured node count as a bounded ring. For example, `--nodes 5` emits only `10.0.0.1` through `10.0.0.5`, with the final node pointing back to the first.
+Nodes form a directed ring. With the default five nodes, source IPs are `192.168.110.0` through `192.168.110.4`, and the last node sends to the first. The IP helper wraps node IDs modulo 256, so counts above 256 reuse addresses.
+
+V2 does not register topology. Add the simulated IPs to `backend/config/topology.json`, with rack assignments and optional display hostnames. Restart the backend and reconnect the frontend after topology changes. The backend reads the hashes and broadcasts authoritative snapshots.
+
+Mode 2 uses `packet:h:{timestamp}` hashes, with `source_ip:dest_ip` fields containing JSON records. This layout is not the current backend's input format.
+
+## Verification and troubleshooting
+
+From the repository root, while the Compose services are running:
+
+```bash
+docker compose -f compose.dev.yaml exec redis redis-cli ping
+curl http://localhost:8080/latest
+```
+
+For Podman, substitute `podman compose`. Expect `PONG` from Redis. Simulator logs report the connection, configuration, progress, write errors, and final statistics; `/latest` should contain current traffic while compatible records are arriving.
+
+- **Connection refused:** verify Redis is running and use `redis` inside the simulator container, or the reachable host address outside it.
+- **Empty graph:** check mode 1, matching Redis databases, topology IPs, and that the run has not ended. The default duration is only 10 seconds.
+- **Records rejected:** use the current V2 source, which includes `samples_per_second`, and a positive bin count.
+- **Memory usage:** reduce TTL, node count, or bin count. Increasing `--pps` increases repeated writes, rather than creating a unique key for every generated record.
+
+## Other simulator variants
+
+Older scripts such as `simulator_bk.py` have different command-line interfaces. Their options do not apply to V2. The following V3 behavior is separate from the V2 workflow above; the current backend uses its static topology file.
 
 ### Simulator v3 topology
 
@@ -305,107 +136,6 @@ Registration uses idempotent `HSET` and `SADD` operations. Topology keys are per
 
 The `topology:nodes` set is the topology index and can be read with `SMEMBERS`; each returned IP directly identifies its `topology:node:<ip>` hash.
 
-## Quick Start
-
-[↑ Back to top](#table-of-contents)
-
-The fastest way to get started:
-
-```bash
-# 1. Start Redis (if not already running)
-docker run -d -p 6379:6379 redis/redis-stack-server:latest
-
-# 2. Setup simulator (first time only)
-cd traffic-simulator
-./setup.sh
-
-# 3. Activate and run
-source venv/bin/activate
-python3 simulator_bk.py
-
-# For remote Redis server:
-# python3 simulator_bk.py --redis-host ejfat-6.jlab.org
-```
-
-## Integration with Other Components
-
-[↑ Back to top](#table-of-contents)
-
-The simulator is a **shared component** used by multiple parts of the system.
-
-### With Backend Server
-
-1. **Start the backend**:
-   ```bash
-   cd ../backend
-   ./setup.sh
-   DEBUG=true go run .
-   ```
-
-2. **Start the simulator** (in another terminal):
-   ```bash
-   cd ../traffic-simulator  # or stay in this directory
-   ./setup.sh
-   source venv/bin/activate
-   python3 simulator_v2.py --redis-host localhost --nodes 5 --mode 1
-   ```
-
-3. **Verify**: Backend logs show polling activity, and `/latest` or WebSocket clients receive `snapshot`/`update` traffic state.
-
-See [Backend README](../backend/README.md) for backend setup details.
-
-### With DAOS Client
-
-1. **Generate data**:
-   ```bash
-   cd ../traffic-simulator
-   ./setup.sh
-   source venv/bin/activate
-   python3 simulator_bk.py
-   ```
-
-2. **Run DAOS client** to read and persist data
-
-See [DAOS Client README](../daos-client/README.md) for DAOS setup details.
-
-## Troubleshooting
-
-[↑ Back to top](#table-of-contents)
-
-### Connection Errors
-
-**Error: "Connection refused"**
-- Make sure Redis is running: `docker ps` or `podman ps`
-- Start Redis if needed: `docker run -d -p 6379:6379 redis/redis-stack-server:latest`
-
-**Error: "Connection timeout"**
-```bash
-# Check if Redis container is running
-docker ps | grep redis              # Using Docker
-podman ps | grep redis              # Using Podman
-
-# Check if port 6379 is listening
-lsof -i:6379                       
-```
-
-### High Memory Usage
-
-Reduce packet rate or enable TTL (already enabled, 1 hour default)
-
-### Publishing Not Working
-
-- Publishing is disabled by default; enable it with `--publish True`
-- Verify channel name matches backend configuration: `--channel traffic_channel`
-- Check if backend is subscribed to the correct channel
-
 ## Development
 
-[↑ Back to top](#table-of-contents)
-
-The simulator is self-contained and can be modified independently of the Go backend. Key classes:
-
-- `PacketGenerator`: Generates packet data
-- `TrafficNode`: Represents a traffic source
-- `TrafficSimulator`: Coordinates multiple nodes
-
-See the source code for detailed documentation.
+V2's main components are `generate_packet`, `HashStorageWriter`, `HPCNode`, and `SimulationController`. Keep stored fields compatible with the backend decoder when changing generation or storage. See [Redis measurements](Redis_measurements.md) for the existing measurement notes.
