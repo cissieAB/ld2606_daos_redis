@@ -25,7 +25,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./backend:/app
+      - ./backend:/app:Z
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
     depends_on:
@@ -40,7 +40,7 @@ services:
     working_dir: /app
     command: sleep infinity
     volumes:
-      - ./traffic-simulator:/app
+      - ./traffic-simulator:/app:Z
     depends_on:
       redis:
         condition: service_healthy
