@@ -8,27 +8,47 @@
     "192.168.110.0": {
       "ip": "192.168.110.0",
       "rack": "rack-1",
-      "hostname": "host-02"
+      "hostname": "v2-node-00"
     },
     "192.168.110.1": {
       "ip": "192.168.110.1",
       "rack": "rack-1",
-      "hostname": "host-03"
+      "hostname": "sim-node-00"
     },
     "192.168.110.2": {
       "ip": "192.168.110.2",
       "rack": "rack-1",
-      "hostname": "host-04"
+      "hostname": "sim-node-01"
     },
     "192.168.110.3": {
       "ip": "192.168.110.3",
-      "rack": "rack-2",
-      "hostname": "host-05"
+      "rack": "rack-1",
+      "hostname": "sim-node-02"
     },
     "192.168.110.4": {
       "ip": "192.168.110.4",
+      "rack": "rack-1",
+      "hostname": "sim-node-03"
+    },
+    "192.168.110.5": {
+      "ip": "192.168.110.5",
       "rack": "rack-2",
-      "hostname": "host-06"
+      "hostname": "sim-node-04"
+    },
+    "192.168.110.6": {
+      "ip": "192.168.110.6",
+      "rack": "rack-2",
+      "hostname": "sim-node-05"
+    },
+    "192.168.110.7": {
+      "ip": "192.168.110.7",
+      "rack": "rack-2",
+      "hostname": "sim-node-06"
+    },
+    "192.168.110.8": {
+      "ip": "192.168.110.8",
+      "rack": "rack-2",
+      "hostname": "sim-node-07"
     }
   }
 }
