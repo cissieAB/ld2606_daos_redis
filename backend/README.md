@@ -245,6 +245,10 @@ Use the V2 simulator in the development container as described in [Getting start
 
 For architecture and implementation details, see [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md).
 
+### Topology
+
+See [config/README.md](config/README.md) for the topology file format, validation rules, and how to apply changes.
+
 ### Optional hostnames
 
 Add `"hostname": "compute-01"` beside a node’s `ip` and `rack` in `config/topology.json` to supply a display name. Existing files need no changes. Empty or omitted names use the IP in the frontend; names need not be unique. The backend includes nonempty names in the initial WebSocket topology. Traffic endpoints and storage keys remain IP-based. Restart the backend and reconnect clients after changing names. `go test ./...` verifies topology loading and hostname serialization.

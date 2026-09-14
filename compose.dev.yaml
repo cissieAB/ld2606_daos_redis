@@ -28,6 +28,8 @@ services:
       REDIS_ADDR: redis:6379
       SERVER_PORT: :8080
       POLL_INTERVAL: 1s
+      # Per-run topology: TOPOLOGY_PATH=config/topology.<run>.json docker compose ... up
+      TOPOLOGY_PATH: ${TOPOLOGY_PATH:-config/topology.json}
       DEBUG: true
     ports:
       - "8080:8080"

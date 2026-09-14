@@ -1,29 +1,14 @@
 {
   "nodes": {
-    "172.18.0.2": {
-      "ip": "172.18.0.2",
-      "rack": "rack-1",
-      "hostname": "redis"
+    "129.57.178.86": {
+      "ip": "129.57.178.86",
+      "rack": "ebpf",
+      "hostname": "ebpf2203"
     },
-    "172.18.0.3": {
-      "ip": "172.18.0.3",
-      "rack": "rack-1",
-      "hostname": "simulator"
-    },
-    "172.18.0.4": {
-      "ip": "172.18.0.4",
-      "rack": "rack-1",
-      "hostname": "backend"
-    },
-    "172.18.0.5": {
-      "ip": "172.18.0.5",
-      "rack": "rack-2",
-      "hostname": "collector"
-    },
-    "172.18.0.6": {
-      "ip": "172.18.0.6",
-      "rack": "rack-2",
-      "hostname": "collector-2"
+    "129.57.178.85": {
+      "ip": "129.57.178.85",
+      "rack": "ebpf",
+      "hostname": "ebpf2201"
     }
   }
 }
