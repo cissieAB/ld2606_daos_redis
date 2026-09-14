@@ -37,3 +37,6 @@ Thumbs.db
 # DAOS Client (to be defined by other devs)
 daos-client/build/
 daos-client/dist/
+
+# Redis data archived at each launch (redis/start-fresh.sh)
+redis-archive/

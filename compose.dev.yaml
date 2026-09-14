@@ -1,10 +1,17 @@
 services:
   redis:
     image: redis/redis-stack-server:latest
+    # Archive the previous run's data and start empty; see redis/start-fresh.sh.
+    entrypoint: ["/start-fresh.sh"]
+    environment:
+      # Append-only file = Redis's write-ahead log; it is what gets archived.
+      REDIS_ARGS: --appendonly yes
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
+      - ./redis/start-fresh.sh:/start-fresh.sh:ro,Z
+      - ./redis-archive:/archive:Z
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s

@@ -30,6 +30,19 @@ podman compose -f compose.dev.yaml up
 
 Use `docker compose` or `podman compose` consistently with your chosen engine. The `tools` profile is only needed for the simulator. Follow the eCenter guide to attach TC ingress and start collectors on the monitored nodes.
 
+## Redis starts empty on every launch
+
+Each time the `redis` container starts (`compose up`, `restart`, or a crash restart), `redis/start-fresh.sh` moves the previous run's data out of the volume into `redis-archive/YYYYMMDD-HHMMSS/` at the repository root, then starts Redis with an empty dataset. The timestamp is the launch time in UTC. Redis runs with `--appendonly yes`, so each archive holds that run's append-only write log (`appendonlydir/`) and, if present, an RDB snapshot (`dump.rdb`).
+
+The backend recreates the `idx:packets` search index if Redis restarts underneath it. `redis-archive/` is git-ignored and is never pruned automatically; delete old runs by hand.
+
+To inspect an archived run, start a throwaway Redis Stack on another port with that directory as its data directory:
+
+```bash
+docker run --rm -p 6380:6379 -v "$PWD/redis-archive/<YYYYMMDD-HHMMSS>:/data:Z" \
+  -e REDIS_ARGS="--appendonly yes" redis/redis-stack-server:latest
+```
+
 ## Verify and stop
 
 From another terminal at the repository root:

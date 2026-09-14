@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -58,4 +59,14 @@ func ensureSearchIndex(ctx context.Context, rdb *redis.Client) error {
 
 	infoLog("Index '%s' created successfully", searchIndexName)
 	return nil
+}
+
+// isMissingIndexError reports whether err is RediSearch saying the index does not exist.
+// Redis Stack 7.x says "no such index"; older RediSearch said "Unknown Index name".
+func isMissingIndexError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such index") || strings.Contains(msg, "unknown index name")
 }

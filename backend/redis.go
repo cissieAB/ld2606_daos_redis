@@ -55,6 +55,15 @@ func startRedisPoller(ctx context.Context, rdb *redis.Client) {
 func pollRedisOnce(ctx context.Context, rdb *redis.Client) {
 	timestamp, packets, err := loadLiveFrame(ctx, rdb, int(time.Now().Unix()))
 	if err != nil {
+		// Redis starts empty on every launch, so a Redis restart under a running
+		// backend drops the index. Recreate it; the next tick will succeed.
+		if isMissingIndexError(err) {
+			infoLog("Index '%s' is missing (Redis restarted?); recreating", searchIndexName)
+			if err := ensureSearchIndex(ctx, rdb); err != nil {
+				errorLog("Error recreating search index: %v", err)
+			}
+			return
+		}
 		errorLog("Poll error: %v", err)
 		return
 	}
